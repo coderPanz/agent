@@ -3,11 +3,50 @@ from typing import List
 from app.utils.config import DOCS_PATH
 from loguru import logger
 from langchain_core.documents import Document
-from app.utils.config import CHUNK_SIZE, CHUNK_OVERLAP, EMBEDDING_MODEL_DIR
-from transformers import AutoModel, AutoTokenizer
+from langchain_community.embeddings import HuggingFaceBgeEmbeddings
+from langchain_community.document_loaders import DirectoryLoader, TextLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from app.utils.config import CHUNK_SIZE, CHUNK_OVERLAP, EMBEDDING_MODEL_DIR, RERANKER_MODEL_DIR, RECALL_TOP_K, RERANK_TOP_K
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
 import chromadb
 import torch
+from app.services.llm import init_llm_client
+from dotenv import load_dotenv
+import os
+import re
+load_dotenv()
+# chroma 客户端
+_chroma_client = None
+# BGE 向量化模型
+_embedding_model = None
 
+# rag 过程中各个阶段需要的提示词
+prompt_manage = {
+    "llm_route": (
+        "你是一个智能路由助手。根据用户问题判断是否需要从知识库检索信息才能回答。\n"
+        "判断规则：\n"
+        "- 涉及具体知识、事实、文档内容、专有名词，需要查阅资料 → 只返回 \"rag\"\n"
+        "- 日常对话、数学计算、代码生成、通用推理等，无需查库 → 直接生成答案\n"
+        "只返回 \"rag\" 或者直接生成答案，不要解释。"
+    ),
+    "rewrite_query": (
+        "你是一个检索优化专家。请将用户的原始问题改写为更适合向量检索的形式：\n"
+        "- 展开缩写、代词和指代，补全缺失的主语或宾语\n"
+        "- 用更精确的专业术语替代口语表达\n"
+        "- 保留核心语义，不添加无关内容\n"
+        "只返回改写后的问题，不添加任何解释或前缀。"
+    ),
+    "generate_rag_answer": (
+        "你是一个基于知识库的问答助手。请严格根据下方参考资料回答用户问题。\n\n"
+        "规则：\n"
+        "1. 答案必须源自参考资料，不得凭空捏造\n"
+        "2. 若资料不足以支撑完整答案，明确说明哪部分无法从资料中找到\n"
+        "3. 若参考资料与问题完全无关，回复：\"当前知识库中未找到与该问题相关的内容，"
+        "建议换个提问方式或联系管理员扩充知识库。\"\n"
+        "4. 回答简洁准确，直接针对问题\n\n"
+        "参考资料：\n{context}"
+    ),
+}
 
 
 """一、====================获取md文档====================="""
@@ -17,9 +56,10 @@ def load_docs():
         raise FileNotFoundError(f"文档路径不存在: {docs_path}")
     # glob 遍历文件，递归匹配所有md文件
     loader = DirectoryLoader(
-        path=str(path),
+        path=str(docs_path),
         glob="**/*.md",
-        loader_cls=UnstructuredMarkdownLoader,
+        loader_cls=TextLoader,
+        loader_kwargs={"encoding": "utf-8"},
     )
     docs = loader.load()
     logger.debug(f"加载完成，共 {len(docs)} 篇文档")
@@ -55,34 +95,48 @@ def split_docs(
     return chunks
 
 
-
-"""三、====================文档向量化====================="""
-def embed_docs(texts: List[str]) -> List[torch.Tensor]:
-    """加载 BGE 向量化模型"""
+"""====================加载 BGE 向量化模型====================="""
+def embed_tool_init() -> bool:
+    global _embedding_model
     model_dir = Path(EMBEDDING_MODEL_DIR)
     if not model_dir.exists():
         raise FileNotFoundError(f"模型目录不存在，请设置 BGE_MODEL_DIR：{model_dir}")
     if not any((model_dir / name).exists() for name in ("pytorch_model.bin", "model.safetensors")):
         raise FileNotFoundError(f"模型目录缺少权重文件：{model_dir}")
+    if _embedding_model:
+        return True
 
     # 加载分词器和模型
-    tokenizer = AutoTokenizer.from_pretrained(model_dir)
-    model = AutoModel.from_pretrained(model_dir)
-    model.eval()
+    _embedding_model = HuggingFaceBgeEmbeddings(
+        model_name=str(model_dir),
+        model_kwargs={"device": "cuda" if torch.cuda.is_available() else "cpu"},
+        encode_kwargs={"normalize_embeddings": True},
+        query_instruction="为这个句子生成表示以用于检索相关文章："
+    )
+    _embedding_model.query_instruction = "为这个句子生成表示以用于检索相关文章："
     logger.info("BGE 向量化模型已加载")
+    return True
 
-    """向量化"""
-    logger.debug(f"向量化 {len(texts)} 条文本...")
-    encoded_input = tokenizer(texts, padding=True, truncation=True, return_tensors='pt')
 
-    with torch.no_grad():
-        model_output = model(**encoded_input)
-        sentence_embeddings = model_output[0][:, 0]
-
-    embeddings = torch.nn.functional.normalize(sentence_embeddings, p=2, dim=1)
+"""三、====================文档向量化====================="""
+def embed_docs(texts: List[str]) -> List[torch.Tensor]:
+    embed_tool_init()
+    embeddings = torch.tensor(_embedding_model.embed_documents(texts))
     logger.debug(f"向量化完成，维度 = {embeddings.shape[1]}")
     return embeddings
 
+
+"""====================初始化 chroma 客户端====================="""
+def chroma_client_init() -> chromadb.PersistentClient:
+    global _chroma_client
+    if _chroma_client:
+        return _chroma_client
+
+    chroma_path = Path(DOCS_PATH).parent / "chroma"
+    # PersistentClient 表示“持久化客户端”，数据会保存到磁盘；str(...) 是把 Path 对象转成字符串路径
+    client = chromadb.PersistentClient(path=str(chroma_path))
+    _chroma_client = client
+    return client
 
 """四、====================向量化存储====================="""
 def store_embeddings(chunks: List[Document], embeddings: torch.Tensor) -> None:
@@ -90,12 +144,9 @@ def store_embeddings(chunks: List[Document], embeddings: torch.Tensor) -> None:
     if len(chunks) != len(embeddings):
         raise ValueError(f"分片数量和向量数量不一致：chunks={len(chunks)} embeddings={len(embeddings)}")
 
-    chroma_path = Path(DOCS_PATH).parent / "chroma"
-    # PersistentClient 表示“持久化客户端”，数据会保存到磁盘；str(...) 是把 Path 对象转成字符串路径
-    client = chromadb.PersistentClient(path=str(chroma_path))
+    client_chroma = chroma_client_init()
     # collection 类似数据库中的一张表；不存在就创建，存在就直接拿来用
-    collection = client.get_or_create_collection(name="rag_chunks")
-
+    collection = client_chroma.get_or_create_collection(name="rag_chunks")
     # 为每个分片生成一个唯一 id
     ids = [f"chunk-{index}" for index in range(len(chunks))]
     # 取出每个 Document 里的正文内容，作为 Chroma 要保存的文本
@@ -118,4 +169,182 @@ def store_embeddings(chunks: List[Document], embeddings: torch.Tensor) -> None:
         metadatas=metadatas,
         embeddings=embedding_values,
     )
-    logger.info(f"向量已写入 Chroma：{chroma_path}，共 {len(chunks)} 个 chunk")
+    logger.info(f"向量已写入 Chroma，共 {len(chunks)} 个 chunk")
+
+"""====================检查向量索引是否存在====================="""
+def check_index() -> bool:
+    client_chroma = chroma_client_init()
+    collection = client_chroma.get_or_create_collection(name="rag_chunks")
+    return collection.count() > 0
+
+"""====================构建向量索引====================="""
+def build_index() -> None:
+    docs = load_docs()
+    chunks = split_docs(docs)
+    texts = [chunk.page_content for chunk in chunks]
+    embeddings = embed_docs(texts)
+    store_embeddings(chunks, embeddings)
+
+
+"""五、====================向量召回 + rerank====================="""
+def recall_embeddings(query: str, top_k: int = 10, rerank_top_k: int = 5) -> List[Document]:
+    """向量召回"""
+    if not query.strip():
+        return []
+
+    client_chroma = chroma_client_init()
+    collection = client_chroma.get_or_create_collection(name="rag_chunks")
+
+    # 用户问题向量化
+    query_embedding = embed_docs([query])[0].detach().cpu().tolist()
+
+    # 2. Chroma 返回最相似的 top_k 个分片；include 指定需要取回文本、元数据和距离
+    result = collection.query(
+        query_embeddings=[query_embedding],
+        n_results=top_k,
+        include=["documents", "metadatas", "distances"],
+    )
+
+    documents = result["documents"][0]
+    metadatas = result["metadatas"][0]
+    distances = result["distances"][0]
+
+    recalled_docs = [
+        Document(
+            page_content=document,
+            metadata={
+                **(metadata or {}),
+                "distance": distance,
+            },
+        )
+        for document, metadata, distance in zip(documents, metadatas, distances)
+    ]
+    if not recalled_docs:
+        return []
+
+    # 3. rerank：把“问题 + 分片文本”交给重排序模型打分，再按分数从高到低排序
+    reranker_dir = Path(RERANKER_MODEL_DIR)
+    if not reranker_dir.exists():
+        logger.warning(f"rerank 模型目录不存在，跳过 rerank：{reranker_dir}")
+        return recalled_docs[:rerank_top_k]
+
+    tokenizer = AutoTokenizer.from_pretrained(reranker_dir)
+    model = AutoModelForSequenceClassification.from_pretrained(reranker_dir)
+    model.eval()
+
+    pairs = [[query, doc.page_content] for doc in recalled_docs]
+    encoded_input = tokenizer(pairs, padding=True, truncation=True, return_tensors='pt')
+    with torch.no_grad():
+        logits = model(**encoded_input).logits
+
+    scores = logits[:, 1] if logits.ndim == 2 and logits.shape[1] > 1 else logits.squeeze(-1)
+    ranked_docs = sorted(
+        zip(scores.tolist(), recalled_docs),
+        key=lambda item: item[0],
+        reverse=True,
+    )
+
+    return [doc for _, doc in ranked_docs[:rerank_top_k]]
+
+
+"""六、====================llm 生成答案====================="""
+def generate_answer(query: str, docs: List[Document], mode: str = "common") -> str:
+    """
+    mode:
+      "common"  — 通用对话，不注入文档
+      "rag"     — 普通 RAG，注入召回文档作为上下文
+      "agentic" — Agentic RAG，注入最佳轮次文档作为上下文
+    """
+    client = init_llm_client()
+
+    if mode in ("rag", "agentic"):
+        context = "\n\n---\n\n".join(doc.page_content for doc in docs)
+        system_prompt = prompt_manage["generate_rag_answer"].format(context=context)
+    else:
+        system_prompt = "你是一个通用助手，请直接、准确地回答用户问题。"
+
+    response = client.chat.completions.create(
+        model=os.getenv("LLM_MODEL"),
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": query},
+        ],
+    )
+    return response.choices[0].message.content
+
+"""====================智能路由====================="""
+def llm_route(query: str) -> str:
+    client = init_llm_client()
+    response = client.chat.completions.create(
+        model=os.getenv("LLM_MODEL"),
+        messages=[
+            {"role": "system", "content": prompt_manage["llm_route"]},
+            {"role": "user", "content": query},
+        ],
+    )
+    res = response.choices[0].message.content
+    return "rag" if "rag" in res else res
+
+"""====================重写提示词====================="""
+def rewrite_query(query: str) -> str:
+    client = init_llm_client()
+    response = client.chat.completions.create(
+        model=os.getenv("LLM_MODEL"),
+        messages=[
+            {"role": "system", "content": prompt_manage["rewrite_query"]},
+            {"role": "user", "content": query},
+        ],
+    )
+    return response.choices[0].message.content.strip()
+
+
+"""====================文本搜索关键字工具====================="""
+def text_search_keyword(text: str):
+  keywords = re.findall(r'\b\w+\b', text)
+  return keywords
+
+"""====================相关性评分====================="""
+def relationship_score(query: str, docs: List[Document]) -> float:
+    """计算用户问题和召回分片的相关性分数，返回 0~1。"""
+    if not query.strip() or not docs:
+        return 0.0
+    query_chars = {char for char in query.lower() if char.strip()}
+    if not query_chars:
+        return 0.0
+
+    scores = []
+    for doc in docs:
+        content_chars = {char for char in doc.page_content.lower() if char.strip()}
+        hit_count = len(query_chars & content_chars)
+        scores.append(hit_count / len(query_chars))
+
+    return max(scores)
+
+
+"""====================RAG 主函数====================="""
+def rag_main(query: str, mode: str = "common") -> str:
+    if mode == "common":
+        logger.info("普通 RAG 模式")
+        # 检查向量索引是否存在
+        if not check_index():
+            logger.warning("向量索引不存在，重新构建")
+            build_index()
+        # 向量召回
+        docs = recall_embeddings(query, top_k=RECALL_TOP_K, rerank_top_k=RERANK_TOP_K)
+        # llm 生成答案
+        answer = generate_answer(query, docs, mode="rag")
+        return answer
+    elif mode == "agentic":
+        # agentic rag mode flow
+        """
+        1. 智能路由
+          1.1. 不需要查库
+          1.2. 需要查库，则进行 rag 流程
+        2. rag 流程
+        3.  llm—rag 评分
+          3.1 相关性不高，重新提示词+re-rag 流程
+          3.2 相关性高，生成答案
+          3.3 设置最大重复次数
+        4. llm 生成返回答案
+        """
+        pass
