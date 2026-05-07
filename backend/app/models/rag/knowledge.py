@@ -25,9 +25,10 @@ class KnowledgeBase(Base):
 
     # 关联文档（一对多）
     # back_populates 与 Document 类里同名关系字段对应，双向导航
-    # cascade="all, delete"：删除本条知识库时，一并删除关联的 Document 行（仅 ORM/数据库层行为，不删磁盘文件）
+    # cascade="all, delete"：删除知识库时自动删除下面所有文档（仅 ORM/数据库层行为，不删磁盘文件）
     documents = relationship(
         "Document",
         back_populates="knowledge_base",
         cascade="all, delete"
     )
+
