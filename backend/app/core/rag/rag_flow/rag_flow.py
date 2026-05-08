@@ -11,7 +11,9 @@ from transformers import AutoModelForSequenceClassification, AutoTokenizer
 import chromadb
 import torch
 from app.services.llm import init_llm_client
+from app.core.prompt.prompt_manage import rag_prompts
 from dotenv import load_dotenv
+import json
 import os
 import re
 load_dotenv()
@@ -19,34 +21,6 @@ load_dotenv()
 _chroma_client = None
 # BGE 向量化模型
 _embedding_model = None
-
-# rag 过程中各个阶段需要的提示词
-prompt_manage = {
-    "llm_route": (
-        "你是一个智能路由助手。根据用户问题判断是否需要从知识库检索信息才能回答。\n"
-        "判断规则：\n"
-        "- 涉及具体知识、事实、文档内容、专有名词，需要查阅资料 → 只返回 \"rag\"\n"
-        "- 日常对话、数学计算、代码生成、通用推理等，无需查库 → 直接生成答案\n"
-        "只返回 \"rag\" 或者直接生成答案，不要解释。"
-    ),
-    "rewrite_query": (
-        "你是一个检索优化专家。请将用户的原始问题改写为更适合向量检索的形式：\n"
-        "- 展开缩写、代词和指代，补全缺失的主语或宾语\n"
-        "- 用更精确的专业术语替代口语表达\n"
-        "- 保留核心语义，不添加无关内容\n"
-        "只返回改写后的问题，不添加任何解释或前缀。"
-    ),
-    "generate_rag_answer": (
-        "你是一个基于知识库的问答助手。请严格根据下方参考资料回答用户问题。\n\n"
-        "规则：\n"
-        "1. 答案必须源自参考资料，不得凭空捏造\n"
-        "2. 若资料不足以支撑完整答案，明确说明哪部分无法从资料中找到\n"
-        "3. 若参考资料与问题完全无关，回复：\"当前知识库中未找到与该问题相关的内容，"
-        "建议换个提问方式或联系管理员扩充知识库。\"\n"
-        "4. 回答简洁准确，直接针对问题\n\n"
-        "参考资料：\n{context}"
-    ),
-}
 
 
 """一、====================获取md文档====================="""
@@ -259,15 +233,17 @@ def generate_answer(query: str, docs: List[Document], mode: str = "common") -> s
 
     if mode in ("rag", "agentic"):
         context = "\n\n---\n\n".join(doc.page_content for doc in docs)
-        system_prompt = prompt_manage["generate_rag_answer"].format(context=context)
+        system_prompt = rag_prompts.generate_answer
+        user_message = f"参考资料：\n{context}\n\n问题：{query}"
     else:
         system_prompt = "你是一个通用助手，请直接、准确地回答用户问题。"
+        user_message = query
 
     response = client.chat.completions.create(
         model=os.getenv("LLM_MODEL"),
         messages=[
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": query},
+            {"role": "user", "content": user_message},
         ],
     )
     return response.choices[0].message.content
@@ -278,20 +254,20 @@ def llm_route(query: str) -> str:
     response = client.chat.completions.create(
         model=os.getenv("LLM_MODEL"),
         messages=[
-            {"role": "system", "content": prompt_manage["llm_route"]},
+            {"role": "system", "content": rag_prompts.llm_route},
             {"role": "user", "content": query},
         ],
     )
     res = response.choices[0].message.content
     return "rag" if "rag" in res else res
 
-"""====================重写提示词====================="""
+"""====================重写 Query====================="""
 def rewrite_query(query: str) -> str:
     client = init_llm_client()
     response = client.chat.completions.create(
         model=os.getenv("LLM_MODEL"),
         messages=[
-            {"role": "system", "content": prompt_manage["rewrite_query"]},
+            {"role": "system", "content": rag_prompts.query_rewrite},
             {"role": "user", "content": query},
         ],
     )
@@ -305,20 +281,37 @@ def text_search_keyword(text: str):
 
 """====================相关性评分====================="""
 def relationship_score(query: str, docs: List[Document]) -> float:
-    """计算用户问题和召回分片的相关性分数，返回 0~1。"""
+    """使用 LLM 对 rerank 后的 top 文档评分，返回 0~1。"""
     if not query.strip() or not docs:
         return 0.0
-    query_chars = {char for char in query.lower() if char.strip()}
+
+    top_doc = docs[0]
+    client = init_llm_client()
+    try:
+        response = client.chat.completions.create(
+            model=os.getenv("LLM_MODEL"),
+            messages=[
+                {"role": "system", "content": rag_prompts.relationship_score},
+                {"role": "user", "content": f"用户问题：{query}\n\n文档片段：{top_doc.page_content}"},
+            ],
+        )
+        raw = response.choices[0].message.content
+        # 兼容 LLM 可能在 JSON 外包裹 markdown 代码块
+        match = re.search(r'\{.*?\}', raw, re.DOTALL)
+        if match:
+            data = json.loads(match.group())
+            score = float(data.get("score", 0.0))
+            logger.debug(f"LLM 相关性评分: {score:.3f} | reason: {data.get('reason', '')}")
+            return max(0.0, min(1.0, score))
+    except Exception as e:
+        logger.warning(f"LLM 相关性评分失败，回退字符级评分: {e}")
+
+    # fallback：字符级重叠率
+    query_chars = {c for c in query.lower() if c.strip()}
     if not query_chars:
         return 0.0
-
-    scores = []
-    for doc in docs:
-        content_chars = {char for char in doc.page_content.lower() if char.strip()}
-        hit_count = len(query_chars & content_chars)
-        scores.append(hit_count / len(query_chars))
-
-    return max(scores)
+    content_chars = {c for c in top_doc.page_content.lower() if c.strip()}
+    return len(query_chars & content_chars) / len(query_chars)
 
 
 """====================RAG 主函数====================="""
