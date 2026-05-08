@@ -1,122 +1,135 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
+import { useState, useRef, useEffect } from 'react'
 import './App.css'
 
-function App() {
-  const [count, setCount] = useState(0)
-
-  return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
-
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+type Mode = 'agentic' | 'common'
+interface Message {
+  role: 'user' | 'assistant'
+  content: string
 }
 
-export default App
+async function ragSearch(query: string, mode: Mode): Promise<string> {
+  const res = await fetch('/api/rag_search', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query, mode }),
+  })
+  if (!res.ok) throw new Error(`请求失败 (HTTP ${res.status})`)
+  const data = await res.json()
+  return data.answer
+}
+
+export default function App() {
+  const [messages, setMessages] = useState<Message[]>([])
+  const [input, setInput] = useState('')
+  const [mode, setMode] = useState<Mode>('agentic')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const bottomRef = useRef<HTMLDivElement>(null)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [messages, loading])
+
+  function autoResize() {
+    const el = textareaRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = `${el.scrollHeight}px`
+  }
+
+  async function handleSend() {
+    const q = input.trim()
+    if (!q || loading) return
+    setInput('')
+    setError(null)
+    if (textareaRef.current) textareaRef.current.style.height = 'auto'
+    setMessages(prev => [...prev, { role: 'user', content: q }])
+    setLoading(true)
+    try {
+      const answer = await ragSearch(q, mode)
+      setMessages(prev => [...prev, { role: 'assistant', content: answer }])
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '未知错误')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      handleSend()
+    }
+  }
+
+  return (
+    <div className="chat-layout">
+      <header className="chat-header">
+        <h1>RAG 知识库问答</h1>
+        <div className="mode-selector">
+          <button
+            className={`mode-btn${mode === 'agentic' ? ' active' : ''}`}
+            onClick={() => setMode('agentic')}
+          >
+            Agentic
+          </button>
+          <button
+            className={`mode-btn${mode === 'common' ? ' active' : ''}`}
+            onClick={() => setMode('common')}
+          >
+            Common
+          </button>
+        </div>
+      </header>
+
+      <main className="chat-messages">
+        {messages.length === 0 && !loading && (
+          <div className="chat-empty">
+            <strong>开始提问</strong>
+            输入问题，从知识库中检索答案
+          </div>
+        )}
+
+        {messages.map((msg, i) => (
+          <div key={i} className={`message message-${msg.role}`}>
+            <div className="message-bubble">{msg.content}</div>
+          </div>
+        ))}
+
+        {loading && (
+          <div className="message message-assistant">
+            <div className="message-bubble loading">
+              <span className="dot" />
+              <span className="dot" />
+              <span className="dot" />
+            </div>
+          </div>
+        )}
+
+        {error && <div className="chat-error">{error}</div>}
+        <div ref={bottomRef} />
+      </main>
+
+      <footer className="chat-input-area">
+        <textarea
+          ref={textareaRef}
+          className="chat-input"
+          value={input}
+          rows={1}
+          placeholder="输入问题，Enter 发送，Shift+Enter 换行"
+          disabled={loading}
+          onChange={e => { setInput(e.target.value); autoResize() }}
+          onKeyDown={handleKeyDown}
+        />
+        <button
+          className="send-btn"
+          onClick={handleSend}
+          disabled={loading || !input.trim()}
+        >
+          发送
+        </button>
+      </footer>
+    </div>
+  )
+}
