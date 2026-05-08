@@ -48,3 +48,23 @@ class RagPrompts:
 
 rag_prompts = RagPrompts()
 
+
+class AgentPrompts:
+    """Agent 各阶段提示词，首次访问时从磁盘读取并缓存。"""
+    _cache: dict[str, str] = {}
+
+    @classmethod
+    def _get(cls, filename: str) -> str:
+        if filename not in cls._cache:
+            cls._cache[filename] = _load(filename)
+        return cls._cache[filename]
+
+    @property
+    def agent_sys_prompt(self) -> str:
+        """Agent 系统提示词"""
+        return self._get("agent_sys_prompt.md")
+
+    @property
+    def agent_user_prompt(self) -> str:
+        """Agent 用户提示词"""
+        return self._get("agent_user_prompt.md")

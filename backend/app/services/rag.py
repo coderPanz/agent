@@ -3,6 +3,7 @@ import time
 from sqlalchemy.orm import Session
 from app.core.rag.rag_mode.agentic_rag import agentic_rag
 from app.core.rag.rag_mode.common_rag import common_rag
+from app.core.rag.rag_flow.rag_flow import recall_embeddings_debug, generate_answer, build_index, check_index
 from app.services.database import SessionLocal
 from app.models.rag.knowledge import KnowledgeBase
 from app.models.rag.knowledge_docs import Document
@@ -20,28 +21,34 @@ def rag_search(query: str, mode: str = "agentic") -> str:
 
 
 def rag_search_debug(query: str, mode: str = "agentic") -> dict:
-    """RAG 搜索（包含调试信息）"""
-    start_time = time.time()
+    """RAG 搜索（包含完整调试信息）"""
+    start_total = time.time()
 
-    if mode == "agentic":
-        answer = agentic_rag(query)
-    elif mode == "common":
-        answer = common_rag(query)
-    else:
-        raise ValueError(f"Invalid mode: {mode}")
+    if not check_index():
+        build_index()
 
-    total_ms = round((time.time() - start_time) * 1000)
+    debug = recall_embeddings_debug(query)
+    docs = debug["docs"]
+
+    t_llm = time.time()
+    answer = generate_answer(query, docs, mode="rag" if docs else "common")
+    llm_ms = (time.time() - t_llm) * 1000
+
+    total_ms = (time.time() - start_total) * 1000
 
     return {
         "question": query,
         "answer": answer,
-        "mode": mode,
+        "query_rewrite": "",
+        "candidate_count": len(debug["candidates"]),
+        "candidates": debug["candidates"],
+        "rerank_rows": debug["rerank_rows"],
         "timings": {
+            "retrieve_ms": debug["retrieve_ms"],
+            "rerank_ms": debug["rerank_ms"],
+            "llm_ms": llm_ms,
             "total_ms": total_ms,
         },
-        "candidates": [],
-        "rerank_rows": [],
-        "candidate_count": 0,
     }
 
 

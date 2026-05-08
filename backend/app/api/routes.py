@@ -3,6 +3,9 @@ from app.api.schemas import (
     HealthResponse,
     RAGResponse,
     RAGRequest,
+    RAGCandidate,
+    RAGRerankRow,
+    RAGTimings,
     KnowledgeBaseResponse,
     KnowledgeBaseDocumentResponse,
     CreateKnowledgeBaseRequest,
@@ -37,7 +40,16 @@ def health() -> HealthResponse:
 """====================RAG 搜索====================="""
 @router.post("/rag_search", response_model=RAGResponse, tags=["rag"])
 def rag_search(request: RAGRequest) -> RAGResponse:
-    return RAGResponse(answer=rag_search_service(request.query, request.mode))
+    result = rag_search_debug_service(request.query, request.mode)
+    return RAGResponse(
+        question=result["question"],
+        answer=result["answer"],
+        query_rewrite=result.get("query_rewrite", ""),
+        candidate_count=result["candidate_count"],
+        candidates=[RAGCandidate(**c) for c in result["candidates"]],
+        rerank_rows=[RAGRerankRow(**r) for r in result["rerank_rows"]],
+        timings=RAGTimings(**result["timings"]),
+    )
 
 @router.post("/rag_search_debug", tags=["rag"])
 def rag_search_debug(request: RAGRequest) -> dict:
@@ -92,3 +104,9 @@ def get_knowledge_base_document(knowledge_base_id: int, document_id: int) -> Kno
 @router.get("/list_knowledge_base_documents", response_model=KnowledgeBaseDocumentResponse, tags=["rag"])
 def list_knowledge_base_documents(knowledge_base_id: int, skip: int = 0, limit: int = 10) -> KnowledgeBaseDocumentResponse:
     return KnowledgeBaseDocumentResponse(answer=list_knowledge_base_documents_service(knowledge_base_id, skip, limit))
+
+
+"""====================Agent-对话====================="""
+@router.post("/agent_chat", response_model=AgentChatResponse, tags=["agent"])
+def agent_chat(request: AgentChatRequest) -> AgentChatResponse:
+    return AgentChatResponse(answer=agent_chat_service(request.query, request.mode))

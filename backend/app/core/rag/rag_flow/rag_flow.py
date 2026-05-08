@@ -221,6 +221,92 @@ def recall_embeddings(query: str, top_k: int = 10, rerank_top_k: int = 5) -> Lis
     return [doc for _, doc in ranked_docs[:rerank_top_k]]
 
 
+"""五b、====================向量召回 + rerank（含调试信息）====================="""
+def recall_embeddings_debug(query: str, top_k: int = 10, rerank_top_k: int = 5) -> dict:
+    """返回召回和 rerank 的详细调试信息"""
+    import time
+
+    if not query.strip():
+        return {"docs": [], "candidates": [], "rerank_rows": [], "retrieve_ms": 0, "rerank_ms": 0}
+
+    client_chroma = chroma_client_init()
+    collection = client_chroma.get_or_create_collection(name="rag_chunks")
+
+    t0 = time.time()
+    query_embedding = embed_docs([query])[0].detach().cpu().tolist()
+    result = collection.query(
+        query_embeddings=[query_embedding],
+        n_results=top_k,
+        include=["documents", "metadatas", "distances"],
+    )
+    retrieve_ms = round((time.time() - t0) * 1000)
+
+    documents = result["documents"][0]
+    metadatas = result["metadatas"][0]
+    distances = result["distances"][0]
+
+    recalled_docs = [
+        Document(
+            page_content=doc,
+            metadata={**(meta or {}), "distance": dist},
+        )
+        for doc, meta, dist in zip(documents, metadatas, distances)
+    ]
+
+    candidates = [
+        {
+            "index": i,
+            "source": str(metadatas[i].get("source", "unknown")) if metadatas[i] else "unknown",
+            "preview": documents[i][:200],
+        }
+        for i in range(len(documents))
+    ]
+
+    if not recalled_docs:
+        return {"docs": [], "candidates": candidates, "rerank_rows": [], "retrieve_ms": retrieve_ms, "rerank_ms": 0}
+
+    t1 = time.time()
+    reranker_dir = Path(RERANKER_MODEL_DIR)
+    if not reranker_dir.exists():
+        rerank_ms = 0
+        final_docs = recalled_docs[:rerank_top_k]
+        rerank_rows = [
+            {"rank": i + 1, "score": 0.0, "original_index": i, "source": candidates[i]["source"], "preview": candidates[i]["preview"]}
+            for i in range(min(rerank_top_k, len(recalled_docs)))
+        ]
+    else:
+        tokenizer = AutoTokenizer.from_pretrained(reranker_dir)
+        model = AutoModelForSequenceClassification.from_pretrained(reranker_dir)
+        model.eval()
+        pairs = [[query, doc.page_content] for doc in recalled_docs]
+        encoded_input = tokenizer(pairs, padding=True, truncation=True, return_tensors='pt')
+        with torch.no_grad():
+            logits = model(**encoded_input).logits
+        scores = logits[:, 1] if logits.ndim == 2 and logits.shape[1] > 1 else logits.squeeze(-1)
+        ranked = sorted(enumerate(scores.tolist()), key=lambda x: x[1], reverse=True)
+        rerank_ms = round((time.time() - t1) * 1000)
+
+        final_docs = [recalled_docs[orig_i] for orig_i, _ in ranked[:rerank_top_k]]
+        rerank_rows = [
+            {
+                "rank": rank + 1,
+                "score": round(score, 4),
+                "original_index": orig_i,
+                "source": candidates[orig_i]["source"],
+                "preview": candidates[orig_i]["preview"],
+            }
+            for rank, (orig_i, score) in enumerate(ranked[:rerank_top_k])
+        ]
+
+    return {
+        "docs": final_docs,
+        "candidates": candidates,
+        "rerank_rows": rerank_rows,
+        "retrieve_ms": retrieve_ms,
+        "rerank_ms": rerank_ms,
+    }
+
+
 """六、====================llm 生成答案====================="""
 def generate_answer(query: str, docs: List[Document], mode: str = "common") -> str:
     """

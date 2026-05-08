@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api/client'
-import type { KnowledgeBase, RAGDocument, RAGDebugResponse } from '../api/client'
+import type { KnowledgeBase, RAGDocument } from '../api/client'
+import { QueryDebugger } from './QueryDebugger'
 import '../styles/knowledge-base.css'
 
 type Tab = 'knowledge-base' | 'query-debugger' | 'pipeline-trace'
@@ -24,17 +25,15 @@ export function KnowledgeBaseManager() {
   const [error, setError] = useState<string | null>(null)
   const [confirm, setConfirm] = useState<ConfirmDialog | null>(null)
 
-  const [debugQuery, setDebugQuery] = useState('')
-  const [debugMode, setDebugMode] = useState<'agentic' | 'common'>('agentic')
-  const [debugResult, setDebugResult] = useState<RAGDebugResponse | null>(null)
-  const [debugLoading, setDebugLoading] = useState(false)
-  const [debugError, setDebugError] = useState<string | null>(null)
-
   useEffect(() => { loadBases() }, [])
 
   useEffect(() => {
-    if (selected) loadDocuments(selected.id)
-    else setDocuments([])
+    if (!selected) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setDocuments([])
+      return
+    }
+    loadDocuments(selected.id)
   }, [selected])
 
   async function loadBases() {
@@ -138,26 +137,6 @@ export function KnowledgeBaseManager() {
     setEditingId(null)
     setFormName('')
     setFormDesc('')
-  }
-
-  async function handleDebugQuery() {
-    if (!debugQuery.trim() || debugLoading) return
-    setDebugLoading(true)
-    setDebugError(null)
-    try {
-      const result = await api.ragSearchDebug({ query: debugQuery.trim(), mode: debugMode })
-      setDebugResult(result)
-    } catch (e) {
-      setDebugError(e instanceof Error ? e.message : '调试查询失败')
-    } finally {
-      setDebugLoading(false)
-    }
-  }
-
-  function clearDebugResult() {
-    setDebugResult(null)
-    setDebugQuery('')
-    setDebugError(null)
   }
 
   return (
@@ -275,116 +254,7 @@ export function KnowledgeBaseManager() {
         </div>
       )}
 
-      {tab === 'query-debugger' && (
-        <div className="debugger-container">
-          <div className="debugger-header">
-            <div className="debugger-input-group">
-              <div className="mode-toggle">
-                <button
-                  className={`toggle-btn${debugMode === 'agentic' ? ' active' : ''}`}
-                  onClick={() => setDebugMode('agentic')}
-                  disabled={debugLoading}
-                >
-                  Agentic
-                </button>
-                <button
-                  className={`toggle-btn${debugMode === 'common' ? ' active' : ''}`}
-                  onClick={() => setDebugMode('common')}
-                  disabled={debugLoading}
-                >
-                  Common
-                </button>
-              </div>
-              <input
-                type="text"
-                className="debugger-input"
-                placeholder="输入查询文本..."
-                value={debugQuery}
-                onChange={e => setDebugQuery(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleDebugQuery()}
-                disabled={debugLoading}
-              />
-              <button
-                className="btn-primary"
-                onClick={handleDebugQuery}
-                disabled={!debugQuery.trim() || debugLoading}
-              >
-                {debugLoading ? '调试中...' : '调试'}
-              </button>
-              {debugResult && (
-                <button className="btn-outline" onClick={clearDebugResult} disabled={debugLoading}>
-                  清空
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="debugger-body">
-            {!debugResult && !debugError && (
-              <div className="debugger-empty">
-                输入查询文本并点击"调试"来查看 RAG 完整链路
-              </div>
-            )}
-
-            {debugError && (
-              <div className="debugger-error">
-                {debugError}
-              </div>
-            )}
-
-            {debugResult && (
-              <div className="debugger-result">
-                {/* Query Info */}
-                <div className="debug-section">
-                  <div className="debug-section-title">查询信息</div>
-                  <div className="debug-info">
-                    <div className="info-row">
-                      <span className="info-label">模式:</span>
-                      <span className="info-value">{debugResult.mode}</span>
-                    </div>
-                    <div className="info-row">
-                      <span className="info-label">总耗时:</span>
-                      <span className="info-value">{debugResult.timings.total_ms}ms</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Recall Info */}
-                <div className="debug-section">
-                  <div className="debug-section-title">向量召回</div>
-                  <div className="debug-info">
-                    <div className="info-row">
-                      <span className="info-label">召回数量:</span>
-                      <span className="info-value">{debugResult.candidate_count}</span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Rerank Info */}
-                {debugResult.rerank_rows && debugResult.rerank_rows.length > 0 && (
-                  <div className="debug-section">
-                    <div className="debug-section-title">重排结果</div>
-                    <div className="debug-rerank-list">
-                      {(debugResult.rerank_rows as Array<{ rank?: number; score?: number }>).map((row, i) => (
-                        <div key={i} className="rerank-item">
-                          <span>#{row.rank ?? i + 1}</span>
-                          <span className="score">{(row.score ?? 0).toFixed(4)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Answer */}
-                <div className="debug-section">
-                  <div className="debug-section-title">LLM 回答</div>
-                  <div className="debug-answer">{debugResult.answer}</div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      {tab === 'query-debugger' && <QueryDebugger />}
 
       {tab === 'pipeline-trace' && (
         <div className="tab-placeholder">Pipeline Trace — 即将推出</div>

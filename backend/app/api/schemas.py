@@ -13,9 +13,36 @@ class RAGRequest(BaseModel):
     query: str
     mode: str = "agentic"
 
+class RAGCandidate(BaseModel):
+    index: int
+    source: str
+    preview: str
+
+
+class RAGRerankRow(BaseModel):
+    rank: int
+    score: float
+    original_index: int
+    source: str
+    preview: str
+
+
+class RAGTimings(BaseModel):
+    retrieve_ms: float
+    rerank_ms: float
+    llm_ms: float
+    total_ms: float
+
+
 class RAGResponse(BaseModel):
     """``POST /rag_search`` 响应体。"""
+    question: str
     answer: str
+    query_rewrite: str = ""
+    candidate_count: int = 0
+    candidates: list[RAGCandidate] = []
+    rerank_rows: list[RAGRerankRow] = []
+    timings: RAGTimings = RAGTimings(retrieve_ms=0, rerank_ms=0, llm_ms=0, total_ms=0)
 
 
 """====================知识库请求体====================="""
@@ -78,3 +105,16 @@ class KnowledgeBaseResponse(BaseModel):
 class KnowledgeBaseDocumentResponse(BaseModel):
     """知识库文档操作响应"""
     answer: dict | list | str
+
+"""====================Agent-对话请求体====================="""
+
+
+class AgentChatRequest(BaseModel):
+    """Agent-对话请求"""
+    query: str
+    mode: str = "agentic"
+
+
+class AgentChatResponse(BaseModel):
+    """Agent-对话响应"""
+    answer: str
