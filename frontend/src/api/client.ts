@@ -93,7 +93,7 @@ export const api = {
     name: string,
     filePath: string,
     content: string
-  ): Promise<Document> {
+  ): Promise<RAGDocument> {
     const res = await fetch(`${API_BASE}/upload_knowledge_base_document`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -109,14 +109,14 @@ export const api = {
     return data.answer
   },
 
-  async listDocuments(kbId: number, skip: number = 0, limit: number = 10): Promise<Document[]> {
+  async listDocuments(kbId: number, skip: number = 0, limit: number = 10): Promise<RAGDocument[]> {
     const res = await fetch(`${API_BASE}/list_knowledge_base_documents?knowledge_base_id=${kbId}&skip=${skip}&limit=${limit}`)
     if (!res.ok) throw new Error(`获取文档列表失败`)
     const data = await res.json()
     return data.answer
   },
 
-  async getDocument(kbId: number, docId: number): Promise<Document> {
+  async getDocument(kbId: number, docId: number): Promise<RAGDocument> {
     const res = await fetch(`${API_BASE}/get_knowledge_base_document?knowledge_base_id=${kbId}&document_id=${docId}`)
     if (!res.ok) throw new Error(`获取文档失败`)
     const data = await res.json()

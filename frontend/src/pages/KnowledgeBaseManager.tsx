@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { api, KnowledgeBase, RAGDocument } from '../api/client'
+import { api } from '../api/client'
+import type { KnowledgeBase, RAGDocument } from '../api/client'
 import '../styles/knowledge-base.css'
 
 export function KnowledgeBaseManager() {
