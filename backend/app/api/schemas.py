@@ -72,9 +72,9 @@ class GetKnowledgeBaseDocumentRequest(BaseModel):
 
 class KnowledgeBaseResponse(BaseModel):
     """知识库操作响应"""
-    answer: dict | str
+    answer: dict | list | str
 
 
 class KnowledgeBaseDocumentResponse(BaseModel):
     """知识库文档操作响应"""
-    answer: dict | str
+    answer: dict | list | str
