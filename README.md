@@ -563,3 +563,26 @@ CUDA	GPU渲染
 ⸻
 建议优先：FastAPI + LangChain + RAG+ Tool Calling
 后面再深入：Transformers + PyTorch+ 本地模型 + 模型微调
+
+
+### langchain
+from langchain_core.documents import Document, 
+langchain 文档对象，包含：正文内容、元数据、唯一 id
+```python
+Document(
+    page_content="xx",
+    metadata={"source": "tweet"},
+    id=1,
+)
+```
+文档分片后的列表都是 Document 对象
+```python
+chunks = splitter.split_documents(documents)
+chunks = [
+    Document(
+        page_content="xx",
+        metadata={"source": "xx"},
+        id=1,
+    ),
+]
+```
