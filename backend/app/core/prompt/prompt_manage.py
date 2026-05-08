@@ -15,15 +15,17 @@ def _load(filename: str) -> str:
 
 class RagPrompts:
     """RAG 各阶段提示词，首次访问时从磁盘读取并缓存。"""
-
     _cache: dict[str, str] = {}
 
+
+    # 把一个方法变成【类方法】，RagPrompts.xxx 即可，cls 由 @classmethod 注入，表示当前类本身
     @classmethod
     def _get(cls, filename: str) -> str:
         if filename not in cls._cache:
             cls._cache[filename] = _load(filename)
         return cls._cache[filename]
 
+    # @property 把方法伪装成属性，调用不用加括号
     @property
     def llm_route(self) -> str:
         """智能路由：判断是否进入 RAG 流程"""
@@ -43,7 +45,6 @@ class RagPrompts:
     def relationship_score(self) -> str:
         """相关性评分：对 query 与文档片段打 0~1 分"""
         return self._get("llm_relationship-score.md")
-
 
 rag_prompts = RagPrompts()
 
