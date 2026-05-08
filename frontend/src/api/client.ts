@@ -9,6 +9,18 @@ export interface RAGSearchResponse {
   answer: string
 }
 
+export interface RAGDebugResponse {
+  question: string
+  answer: string
+  mode: string
+  timings: {
+    total_ms: number
+  }
+  candidates: unknown[]
+  rerank_rows: unknown[]
+  candidate_count: number
+}
+
 export interface KnowledgeBase {
   id: number
   name: string
@@ -37,6 +49,16 @@ export const api = {
     if (!res.ok) throw new Error(`请求失败 (HTTP ${res.status})`)
     const data = await res.json()
     return data.answer
+  },
+
+  async ragSearchDebug(req: RAGSearchRequest): Promise<RAGDebugResponse> {
+    const res = await fetch(`${API_BASE}/rag_search_debug`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(req),
+    })
+    if (!res.ok) throw new Error(`调试请求失败 (HTTP ${res.status})`)
+    return await res.json()
   },
 
   // 知识库 CRUD

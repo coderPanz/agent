@@ -1,4 +1,5 @@
 """RAG 服务"""
+import time
 from sqlalchemy.orm import Session
 from app.core.rag.rag_mode.agentic_rag import agentic_rag
 from app.core.rag.rag_mode.common_rag import common_rag
@@ -16,6 +17,32 @@ def rag_search(query: str, mode: str = "agentic") -> str:
         return common_rag(query)
     else:
         raise ValueError(f"Invalid mode: {mode}")
+
+
+def rag_search_debug(query: str, mode: str = "agentic") -> dict:
+    """RAG 搜索（包含调试信息）"""
+    start_time = time.time()
+
+    if mode == "agentic":
+        answer = agentic_rag(query)
+    elif mode == "common":
+        answer = common_rag(query)
+    else:
+        raise ValueError(f"Invalid mode: {mode}")
+
+    total_ms = round((time.time() - start_time) * 1000)
+
+    return {
+        "question": query,
+        "answer": answer,
+        "mode": mode,
+        "timings": {
+            "total_ms": total_ms,
+        },
+        "candidates": [],
+        "rerank_rows": [],
+        "candidate_count": 0,
+    }
 
 
 """====================RAG 知识库 CRUD====================="""

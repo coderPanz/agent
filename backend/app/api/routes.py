@@ -15,6 +15,7 @@ from app.api.schemas import (
 )
 from app.services.rag import (
     rag_search as rag_search_service,
+    rag_search_debug as rag_search_debug_service,
     create_knowledge_base_service,
     delete_knowledge_base_service,
     update_knowledge_base_service,
@@ -37,6 +38,10 @@ def health() -> HealthResponse:
 @router.post("/rag_search", response_model=RAGResponse, tags=["rag"])
 def rag_search(request: RAGRequest) -> RAGResponse:
     return RAGResponse(answer=rag_search_service(request.query, request.mode))
+
+@router.post("/rag_search_debug", tags=["rag"])
+def rag_search_debug(request: RAGRequest) -> dict:
+    return rag_search_debug_service(request.query, request.mode)
 
 """====================RAG 知识库创建====================="""
 @router.post("/create_knowledge_base", response_model=KnowledgeBaseResponse, tags=["rag"])

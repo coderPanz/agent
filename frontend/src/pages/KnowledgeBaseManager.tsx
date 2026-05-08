@@ -1,9 +1,14 @@
 import { useState, useEffect } from 'react'
 import { api } from '../api/client'
-import type { KnowledgeBase, RAGDocument } from '../api/client'
+import type { KnowledgeBase, RAGDocument, RAGDebugResponse } from '../api/client'
 import '../styles/knowledge-base.css'
 
 type Tab = 'knowledge-base' | 'query-debugger' | 'pipeline-trace'
+
+interface ConfirmDialog {
+  message: string
+  onConfirm: () => void
+}
 
 export function KnowledgeBaseManager() {
   const [tab, setTab] = useState<Tab>('knowledge-base')
@@ -17,6 +22,13 @@ export function KnowledgeBaseManager() {
   const [formDesc, setFormDesc] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [confirm, setConfirm] = useState<ConfirmDialog | null>(null)
+
+  const [debugQuery, setDebugQuery] = useState('')
+  const [debugMode, setDebugMode] = useState<'agentic' | 'common'>('agentic')
+  const [debugResult, setDebugResult] = useState<RAGDebugResponse | null>(null)
+  const [debugLoading, setDebugLoading] = useState(false)
+  const [debugError, setDebugError] = useState<string | null>(null)
 
   useEffect(() => { loadBases() }, [])
 
@@ -73,27 +85,38 @@ export function KnowledgeBaseManager() {
   }
 
   async function handleDeleteBase(id: number) {
-    if (!confirm('确认删除该知识库及其所有文档？')) return
-    setLoading(true)
-    try {
-      await api.deleteKnowledgeBase(id)
-      setBases(prev => prev.filter(b => b.id !== id))
-      if (selected?.id === id) setSelected(null)
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '删除失败')
-    } finally {
-      setLoading(false)
-    }
+    setConfirm({
+      message: '确认删除该知识库及其所有文档？',
+      onConfirm: async () => {
+        setLoading(true)
+        try {
+          await api.deleteKnowledgeBase(id)
+          setBases(prev => prev.filter(b => b.id !== id))
+          if (selected?.id === id) setSelected(null)
+          setConfirm(null)
+        } catch (e) {
+          setError(e instanceof Error ? e.message : '删除失败')
+        } finally {
+          setLoading(false)
+        }
+      }
+    })
   }
 
   async function handleDeleteDoc(docId: number) {
-    if (!selected || !confirm('确认删除该文档？')) return
-    try {
-      await api.deleteDocument(selected.id, docId)
-      setDocuments(prev => prev.filter(d => d.id !== docId))
-    } catch (e) {
-      setError(e instanceof Error ? e.message : '删除文档失败')
-    }
+    if (!selected) return
+    setConfirm({
+      message: '确认删除该文档？',
+      onConfirm: async () => {
+        try {
+          await api.deleteDocument(selected.id, docId)
+          setDocuments(prev => prev.filter(d => d.id !== docId))
+          setConfirm(null)
+        } catch (e) {
+          setError(e instanceof Error ? e.message : '删除文档失败')
+        }
+      }
+    })
   }
 
   function openCreate() {
@@ -117,6 +140,26 @@ export function KnowledgeBaseManager() {
     setFormDesc('')
   }
 
+  async function handleDebugQuery() {
+    if (!debugQuery.trim() || debugLoading) return
+    setDebugLoading(true)
+    setDebugError(null)
+    try {
+      const result = await api.ragSearchDebug({ query: debugQuery.trim(), mode: debugMode })
+      setDebugResult(result)
+    } catch (e) {
+      setDebugError(e instanceof Error ? e.message : '调试查询失败')
+    } finally {
+      setDebugLoading(false)
+    }
+  }
+
+  function clearDebugResult() {
+    setDebugResult(null)
+    setDebugQuery('')
+    setDebugError(null)
+  }
+
   return (
     <div className="rag-studio">
       {/* Tab bar */}
@@ -126,21 +169,21 @@ export function KnowledgeBaseManager() {
           onClick={() => setTab('knowledge-base')}
         >
           <IconKB />
-          Knowledge Base
+          知识库
         </button>
         <button
           className={`rag-tab${tab === 'query-debugger' ? ' active' : ''}`}
           onClick={() => setTab('query-debugger')}
         >
           <IconSearch />
-          Query Debugger
+          RAG查询调试器
         </button>
         <button
           className={`rag-tab${tab === 'pipeline-trace' ? ' active' : ''}`}
           onClick={() => setTab('pipeline-trace')}
         >
           <IconPipeline />
-          Pipeline Trace
+          管道追踪
         </button>
       </div>
 
@@ -149,7 +192,7 @@ export function KnowledgeBaseManager() {
           {/* Left: KB list */}
           <div className="kb-list-panel">
             <div className="kb-list-header">
-              <span>Knowledge Bases</span>
+              <span>知识库</span>
               <button className="kb-new-btn" onClick={openCreate} disabled={loading}>
                 + New
               </button>
@@ -233,7 +276,114 @@ export function KnowledgeBaseManager() {
       )}
 
       {tab === 'query-debugger' && (
-        <div className="tab-placeholder">Query Debugger — 即将推出</div>
+        <div className="debugger-container">
+          <div className="debugger-header">
+            <div className="debugger-input-group">
+              <div className="mode-toggle">
+                <button
+                  className={`toggle-btn${debugMode === 'agentic' ? ' active' : ''}`}
+                  onClick={() => setDebugMode('agentic')}
+                  disabled={debugLoading}
+                >
+                  Agentic
+                </button>
+                <button
+                  className={`toggle-btn${debugMode === 'common' ? ' active' : ''}`}
+                  onClick={() => setDebugMode('common')}
+                  disabled={debugLoading}
+                >
+                  Common
+                </button>
+              </div>
+              <input
+                type="text"
+                className="debugger-input"
+                placeholder="输入查询文本..."
+                value={debugQuery}
+                onChange={e => setDebugQuery(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleDebugQuery()}
+                disabled={debugLoading}
+              />
+              <button
+                className="btn-primary"
+                onClick={handleDebugQuery}
+                disabled={!debugQuery.trim() || debugLoading}
+              >
+                {debugLoading ? '调试中...' : '调试'}
+              </button>
+              {debugResult && (
+                <button className="btn-outline" onClick={clearDebugResult} disabled={debugLoading}>
+                  清空
+                </button>
+              )}
+            </div>
+          </div>
+
+          <div className="debugger-body">
+            {!debugResult && !debugError && (
+              <div className="debugger-empty">
+                输入查询文本并点击"调试"来查看 RAG 完整链路
+              </div>
+            )}
+
+            {debugError && (
+              <div className="debugger-error">
+                {debugError}
+              </div>
+            )}
+
+            {debugResult && (
+              <div className="debugger-result">
+                {/* Query Info */}
+                <div className="debug-section">
+                  <div className="debug-section-title">查询信息</div>
+                  <div className="debug-info">
+                    <div className="info-row">
+                      <span className="info-label">模式:</span>
+                      <span className="info-value">{debugResult.mode}</span>
+                    </div>
+                    <div className="info-row">
+                      <span className="info-label">总耗时:</span>
+                      <span className="info-value">{debugResult.timings.total_ms}ms</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Recall Info */}
+                <div className="debug-section">
+                  <div className="debug-section-title">向量召回</div>
+                  <div className="debug-info">
+                    <div className="info-row">
+                      <span className="info-label">召回数量:</span>
+                      <span className="info-value">{debugResult.candidate_count}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Rerank Info */}
+                {debugResult.rerank_rows && debugResult.rerank_rows.length > 0 && (
+                  <div className="debug-section">
+                    <div className="debug-section-title">重排结果</div>
+                    <div className="debug-rerank-list">
+                      {(debugResult.rerank_rows as Array<{ rank?: number; score?: number }>).map((row, i) => (
+                        <div key={i} className="rerank-item">
+                          <span>#{row.rank ?? i + 1}</span>
+                          <span className="score">{(row.score ?? 0).toFixed(4)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Answer */}
+                <div className="debug-section">
+                  <div className="debug-section-title">LLM 回答</div>
+                  <div className="debug-answer">{debugResult.answer}</div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {tab === 'pipeline-trace' && (
@@ -279,6 +429,21 @@ export function KnowledgeBaseManager() {
           onClose={() => setShowUpload(false)}
           onSuccess={() => { setShowUpload(false); loadDocuments(selected.id) }}
         />
+      )}
+
+      {confirm && (
+        <div className="modal-overlay" onClick={() => setConfirm(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <h3>确认</h3>
+            <p style={{ color: 'var(--text)', marginBottom: '24px' }}>{confirm.message}</p>
+            <div className="modal-actions">
+              <button className="btn-danger" onClick={confirm.onConfirm} disabled={loading}>
+                删除
+              </button>
+              <button className="btn-outline" onClick={() => setConfirm(null)}>取消</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {error && <div className="error-banner">{error}</div>}
