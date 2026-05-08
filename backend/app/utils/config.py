@@ -1,4 +1,5 @@
 # 配置项目中各个模块需要的依赖
+import os
 from pathlib import Path
 from dotenv import load_dotenv
 load_dotenv()
@@ -22,16 +23,3 @@ LLM_BASE_URL = os.getenv("LLM_BASE_URL")
 
 # 数据文档路径
 DOCS_PATH = Path(__file__).resolve().parents[2] / "data/docs"
-
-
-
-
-
-
-
-
-
-
-
-
-
