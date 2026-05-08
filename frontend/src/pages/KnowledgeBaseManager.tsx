@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react'
-import { api, KnowledgeBase, Document } from '../api/client'
+import { api, KnowledgeBase, RAGDocument } from '../api/client'
 import '../styles/knowledge-base.css'
 
 export function KnowledgeBaseManager() {
   const [bases, setBases] = useState<KnowledgeBase[]>([])
   const [selectedBase, setSelectedBase] = useState<KnowledgeBase | null>(null)
-  const [documents, setDocuments] = useState<Document[]>([])
+  const [documents, setDocuments] = useState<RAGDocument[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showCreateForm, setShowCreateForm] = useState(false)

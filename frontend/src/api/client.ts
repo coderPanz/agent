@@ -17,7 +17,7 @@ export interface KnowledgeBase {
   documents_count?: number
 }
 
-export interface Document {
+export interface RAGDocument {
   id: number
   name: string
   file_path: string
