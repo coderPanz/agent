@@ -2,8 +2,6 @@ import { useState, useRef, useEffect } from 'react'
 import { api } from '../api/client'
 import '../styles/chat.css'
 
-type Mode = 'agentic' | 'common'
-
 interface Message {
   role: 'user' | 'assistant'
   content: string
@@ -16,7 +14,6 @@ interface ChatPageProps {
 export function ChatPage({ onFirstMessage }: ChatPageProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
-  const [mode, setMode] = useState<Mode>('agentic')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -49,8 +46,8 @@ export function ChatPage({ onFirstMessage }: ChatPageProps) {
 
     setLoading(true)
     try {
-      const answer = await api.ragSearch({ query: q, mode })
-      setMessages(prev => [...prev, { role: 'assistant', content: answer }])
+      const result = await api.agentChat(q)
+      setMessages(prev => [...prev, { role: 'assistant', content: result.answer }])
     } catch (e) {
       setError(e instanceof Error ? e.message : '请求失败')
     } finally {
@@ -78,20 +75,6 @@ export function ChatPage({ onFirstMessage }: ChatPageProps) {
         onKeyDown={handleKeyDown}
       />
       <div className="chat-input-actions">
-        <div className="mode-selector">
-          <button
-            className={`mode-btn${mode === 'agentic' ? ' active' : ''}`}
-            onClick={() => setMode('agentic')}
-          >
-            Agentic
-          </button>
-          <button
-            className={`mode-btn${mode === 'common' ? ' active' : ''}`}
-            onClick={() => setMode('common')}
-          >
-            Common
-          </button>
-        </div>
         <button className="send-btn" onClick={handleSend} disabled={loading || !input.trim()}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <line x1="12" y1="19" x2="12" y2="5" />

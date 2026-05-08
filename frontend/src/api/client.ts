@@ -9,16 +9,34 @@ export interface RAGSearchResponse {
   answer: string
 }
 
+export interface RAGCandidate {
+  index: number
+  source: string
+  preview: string
+}
+
+export interface RAGRerankRow {
+  rank: number
+  score: number
+  original_index: number
+  source: string
+  preview: string
+}
+
 export interface RAGDebugResponse {
   question: string
   answer: string
   mode: string
+  query_rewrite: string
+  candidate_count: number
+  candidates: RAGCandidate[]
+  rerank_rows: RAGRerankRow[]
   timings: {
+    retrieve_ms: number
+    rerank_ms: number
+    llm_ms: number
     total_ms: number
   }
-  candidates: unknown[]
-  rerank_rows: unknown[]
-  candidate_count: number
 }
 
 export interface KnowledgeBase {
@@ -39,26 +57,31 @@ export interface RAGDocument {
 }
 
 export const api = {
-  // RAG 搜索
-  async ragSearch(req: RAGSearchRequest): Promise<string> {
-    const res = await fetch(`${API_BASE}/rag_search`, {
+  // Agent 对话
+  async agentChat(query: string): Promise<RAGSearchResponse> {
+    const res = await fetch(`${API_BASE}/agent_chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(req),
+      body: JSON.stringify({ query }),
     })
     if (!res.ok) throw new Error(`请求失败 (HTTP ${res.status})`)
     const data = await res.json()
     return data.answer
   },
 
-  async ragSearchDebug(req: RAGSearchRequest): Promise<RAGDebugResponse> {
-    const res = await fetch(`${API_BASE}/rag_search_debug`, {
+  // RAG 搜索（返回完整调试结构）
+  async ragSearch(req: RAGSearchRequest): Promise<RAGDebugResponse> {
+    const res = await fetch(`${API_BASE}/rag_search`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(req),
     })
-    if (!res.ok) throw new Error(`调试请求失败 (HTTP ${res.status})`)
+    if (!res.ok) throw new Error(`请求失败 (HTTP ${res.status})`)
     return await res.json()
+  },
+
+  async ragSearchDebug(req: RAGSearchRequest): Promise<RAGDebugResponse> {
+    return await api.ragSearch(req)
   },
 
   // 知识库 CRUD
