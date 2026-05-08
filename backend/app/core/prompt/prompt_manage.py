@@ -46,3 +46,4 @@ class RagPrompts:
 
 
 rag_prompts = RagPrompts()
+
