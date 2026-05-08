@@ -1,0 +1,417 @@
+/* ── Query Debugger root ── */
+.qd-root {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 16px;
+  gap: 12px;
+}
+
+/* ── Toolbar ── */
+.qd-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.qd-mode-toggle {
+  display: flex;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 6px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.qd-mode-btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+
+.qd-mode-btn:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.qd-mode-btn.active {
+  background: var(--accent);
+  color: #fff;
+}
+
+.qd-mode-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.qd-input {
+  flex: 1;
+  padding: 7px 12px;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-elevated);
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.12s;
+}
+
+.qd-input:focus {
+  border-color: var(--accent);
+}
+
+.qd-input::placeholder {
+  color: var(--text-dim);
+}
+
+.qd-input:disabled {
+  opacity: 0.5;
+}
+
+.qd-icon-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.12s, color 0.12s;
+}
+
+.qd-icon-btn:hover:not(:disabled) {
+  background: var(--bg-hover);
+  color: var(--text);
+}
+
+.qd-icon-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.qd-debug-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: opacity 0.12s;
+}
+
+.qd-debug-btn:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.qd-debug-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+/* ── Body ── */
+.qd-body {
+  flex: 1;
+  min-height: 0; /* required for overflow-y to work inside a flex parent */
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ── Empty / Loading / Error ── */
+.qd-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 64px 16px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.qd-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 64px 16px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.qd-error {
+  padding: 12px 16px;
+  border: 1px solid rgba(255, 69, 58, 0.3);
+  background: rgba(255, 69, 58, 0.1);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--error);
+}
+
+/* ── Pipeline steps ── */
+.qd-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ── Section card ── */
+.qd-section {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.025);
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.qd-section-title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.qd-zap-icon {
+  color: #3b82f6;
+  flex-shrink: 0;
+}
+
+.qd-section-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text);
+}
+
+.qd-section-latency {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* ── Chunks ── */
+.qd-chunks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.qd-chunk {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.025);
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 12px;
+}
+
+.qd-chunk-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.qd-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  font-size: 11px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.07);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.qd-chunk-preview {
+  font-size: 11.5px;
+  color: #c8d0e0;
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* ── Rerank ── */
+.qd-rerank-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.qd-rerank-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.qd-rerank-source {
+  flex: 1;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.qd-rerank-score {
+  font-family: monospace;
+  font-weight: 600;
+  color: #4ade80;
+}
+
+/* ── Context Build ── */
+.qd-context-text {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.qd-context-val {
+  color: var(--text);
+}
+
+/* ── Answer card ── */
+.qd-answer-card {
+  border: 1px solid rgba(74, 222, 128, 0.2);
+  background: rgba(74, 222, 128, 0.04);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.qd-answer-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 8px 12px;
+}
+
+.qd-bot-icon {
+  color: #4ade80;
+  flex-shrink: 0;
+}
+
+.qd-answer-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #4ade80;
+}
+
+.qd-latency-total {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.qd-answer-body {
+  padding: 12px;
+  font-size: 13px;
+  color: var(--text);
+  line-height: 1.65;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* ── Spinner animation ── */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+
+/* ── Markdown rendering in LLM Response ── */
+.qd-markdown { color: var(--text); font-size: 13px; line-height: 1.7; }
+
+.qd-markdown h1,
+.qd-markdown h2,
+.qd-markdown h3,
+.qd-markdown h4 {
+  font-weight: 600;
+  color: var(--text);
+  margin: 12px 0 6px;
+  line-height: 1.4;
+}
+.qd-markdown h1 { font-size: 16px; }
+.qd-markdown h2 { font-size: 14px; }
+.qd-markdown h3 { font-size: 13px; }
+
+.qd-markdown p { margin: 6px 0; }
+
+.qd-markdown strong { font-weight: 600; color: var(--text); }
+.qd-markdown em { font-style: italic; color: var(--text-muted); }
+
+.qd-markdown ul,
+.qd-markdown ol {
+  padding-left: 18px;
+  margin: 6px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.qd-markdown li { color: var(--text); }
+
+.qd-markdown code {
+  font-family: monospace;
+  font-size: 12px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #7dd3fc;
+}
+
+.qd-markdown pre {
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+.qd-markdown pre code {
+  background: none;
+  padding: 0;
+  color: #e2e8f0;
+}
+
+.qd-markdown blockquote {
+  border-left: 3px solid rgba(255, 255, 255, 0.2);
+  padding-left: 12px;
+  color: var(--text-muted);
+  margin: 6px 0;
+}
+
+.qd-markdown table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 8px 0;
+  font-size: 12px;
+}
+.qd-markdown th,
+.qd-markdown td {
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 5px 10px;
+  text-align: left;
+}
+.qd-markdown th { background: rgba(255, 255, 255, 0.06); font-weight: 600; }
+
+.qd-markdown a { color: #60a5fa; text-decoration: underline; }
