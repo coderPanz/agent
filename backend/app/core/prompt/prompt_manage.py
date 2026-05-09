@@ -53,12 +53,16 @@ class AgentPrompts:
     """Agent 各阶段提示词，首次访问时从磁盘读取并缓存。"""
     _cache: dict[str, str] = {}
 
+    # 把一个方法变成【类方法】，cls 由 @classmethod 注入，表示当前类本身
+    # AgentPrompts._get("agent_sys_prompt.md") 即可
     @classmethod
     def _get(cls, filename: str) -> str:
         if filename not in cls._cache:
             cls._cache[filename] = _load(filename)
         return cls._cache[filename]
 
+    # @property 把方法伪装成属性，实例调用不用加括号（注意不是类直接调用） 
+    # AgentPrompts().agent_sys_prompt 即可
     @property
     def agent_sys_prompt(self) -> str:
         """Agent 系统提示词"""

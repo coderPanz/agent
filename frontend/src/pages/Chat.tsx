@@ -46,8 +46,8 @@ export function ChatPage({ onFirstMessage }: ChatPageProps) {
 
     setLoading(true)
     try {
-      const result = await api.agentChat(q)
-      setMessages(prev => [...prev, { role: 'assistant', content: result.answer }])
+      const answer = await api.agentChat(q)
+      setMessages(prev => [...prev, { role: 'assistant', content: answer }])
     } catch (e) {
       setError(e instanceof Error ? e.message : '请求失败')
     } finally {

@@ -161,7 +161,7 @@ export function QueryDebugger() {
                 latency={recallStep.latencyMs}
               >
                 <div className="qd-chunks">
-                  {((recallStep.details.chunks as RAGCandidate[]) ?? []).slice(0, 5).map((chunk, i) => (
+                  {((recallStep.details.chunks as RAGCandidate[]) ?? []).map((chunk, i) => (
                     <div key={i} className="qd-chunk">
                       <div className="qd-chunk-header">
                         <span className="qd-badge">{chunk.source.split('/').pop()}</span>
@@ -188,17 +188,6 @@ export function QueryDebugger() {
               </Section>
             )}
 
-            {/* Context Build */}
-            {contextStep && (
-              <Section title="上下文构建" latency={contextStep.latencyMs}>
-                <p className="qd-context-text">
-                  最终chunks:{' '}
-                  <span className="qd-context-val">
-                    {String((contextStep.details.final_chunks as number) ?? '')}
-                  </span>
-                </p>
-              </Section>
-            )}
 
             {/* LLM Response */}
             {llmStep && (

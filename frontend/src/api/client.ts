@@ -58,7 +58,7 @@ export interface RAGDocument {
 
 export const api = {
   // Agent 对话
-  async agentChat(query: string): Promise<RAGSearchResponse> {
+  async agentChat(query: string): Promise<string> {
     const res = await fetch(`${API_BASE}/agent_chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

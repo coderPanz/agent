@@ -15,6 +15,8 @@ from app.api.schemas import (
     UploadKnowledgeBaseDocumentRequest,
     DeleteKnowledgeBaseDocumentRequest,
     GetKnowledgeBaseDocumentRequest,
+    AgentChatRequest,
+    AgentChatResponse,
 )
 from app.services.rag import (
     rag_search as rag_search_service,
@@ -29,6 +31,7 @@ from app.services.rag import (
     get_knowledge_base_document_service,
     list_knowledge_base_documents_service,
 )
+from app.services.agent import agent_chat_service
 
 router = APIRouter()
 
@@ -109,4 +112,4 @@ def list_knowledge_base_documents(knowledge_base_id: int, skip: int = 0, limit: 
 """====================Agent-对话====================="""
 @router.post("/agent_chat", response_model=AgentChatResponse, tags=["agent"])
 def agent_chat(request: AgentChatRequest) -> AgentChatResponse:
-    return AgentChatResponse(answer=agent_chat_service(request.query, request.mode))
+    return AgentChatResponse(answer=agent_chat_service(request.query))
