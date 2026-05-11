@@ -15,39 +15,55 @@ originSessionId: f7f05be4-dddf-4c65-91a4-0fe439b4f10f
 | `langgraph.md` | LangGraph 概念学习笔记（含 MVP 代码模板） |
 | `agent 执行流程.md` | 第一版流程图设计 |
 
-## 文件实现状态（截至 2026-05-11）
+## 文件实现状态（截至 2026-05-11，commit 08584f5）
 
-### 已创建但**仅有 docstring 占位**（待实现）
+### P0 已实现
 
-| 文件 | 占位内容 |
-|------|---------|
-| `state.py` | `"""Agent-State: 定义流经所有节点的数据结构"""` |
-| `graph.py` | 空（1 行） |
-| `agent_runtime.py` | `"""Agent-Runtime: 入口、流式输出、异常恢复、生命周期"""` |
-| `nodes/router.py` | `"""Agent-Router: 意图识别"""` |
-| `nodes/context_builder.py` | 占位 |
-| `nodes/critic.py` | 占位 |
-| `memory/manager.py` | 占位 |
-| `observability/trace.py` | 占位（用户在 IDE 中打开了此文件） |
-| `tools/registry.py` | 占位 |
-| `executors/base.py` | `# 执行器基类` |
-| `executors/react/executor.py` | 空（1 行） |
+| 文件 | 状态 | 说明 |
+|------|------|------|
+| `state.py` | ✅ 已实现 | AgentState、TokenUsage、ReActStep、ToolCallRecord 完整定义 |
+| `graph.py` | ✅ 已实现 | StateGraph 节点注册 + 条件路由（含 human_approval 可选） |
+| `agent_runtime.py` | ✅ 已实现 | chat() 同步 + stream_chat() 流式两个接口 |
+| `executors/react/executor.py` | ✅ 已实现 | 手动 Thought→Action→Obs 循环，含 hallucination 防护和兜底 |
+| `executors/react/prompts.py` | ✅ 已实现 | REACT_SYSTEM_PROMPT、OBSERVATION_TEMPLATE |
+| `tools/registry.py` | ✅ 已实现 | 单例 ToolRegistry，装饰器注册，asyncio.wait_for 超时，重试 |
 
-### 旧版文件（第一版，仍保留）
+### P1 已实现
+
+| 文件 | 状态 | 说明 |
+|------|------|------|
+| `nodes/router.py` | ✅ 已实现 | LLM 意图分类，输出 react/chat/rag/unknown |
+| `nodes/context_builder.py` | ✅ 已实现 | 优先级拼接，token 预算裁剪，最近 8 轮对话 |
+| `nodes/critic.py` | ✅ 已实现 | LLM 质量校验，retry_count 超限时兜底通过 |
+| `memory/manager.py` | ✅ 已实现 | MemoryManager 统一入口（短期 + summarizer） |
+| `observability/trace.py` | ✅ 已实现 | 结构化 JSON Trace，节点/工具/token/错误日志 |
+
+### 待实现（P1/P2）
 
 | 文件 | 说明 |
 |------|------|
-| `agent.py` | 最简 agent_chat()，直接调用 LLM，无状态机 |
-| `router.py`（根目录） | 空（1 行） |
-| `context.py` | 空（1 行） |
-| `memory.py`（根目录） | 空（1 行） |
-| `trace.py`（根目录） | 空（1 行） |
-| `tools.py` | 已删除（git status 显示 D） |
+| `memory/short_term.py` | 短期记忆存储（in-memory dict，生产换 Redis） |
+| `memory/summarizer.py` | 历史摘要压缩 |
+| `memory/long_term.py` | 长期记忆（预留） |
+| `nodes/finalize.py` | 最终回复组装节点 |
+| `nodes/memory_write.py` | 记忆写回节点 |
+| `nodes/human_approval.py` | Human-in-the-loop 中断节点 |
+| `executors/react/self_refine.py` | 自我修正模块 |
+| `observability/logger.py` | 日志封装 |
+| `observability/callback_handler.py` | LangChain Callback 钩子 |
+| `tools/builtin/search.py` | 内置搜索工具 |
+| `tools/builtin/calculator.py` | 内置计算工具 |
+| `executors/base.py` | 执行器抽象基类 |
+
+### 已删除（第一版旧文件）
+
+`agent.py`、`context.py`、`router.py`（根目录）、`memory.py`（根目录）、`trace.py`（根目录）、`tools.py`
 
 ## 当前开发重点
 
-用户正在按第二版技术方案的 P0 优先级逐步实现：
-1. `state.py` → 2. `graph.py` → 3. `nodes/router.py` → 4. `executors/react/executor.py` → 5. `tools/registry.py`
+P0/P1 核心模块已实现，下一步按 P1→P2 顺序补全剩余节点：
+1. `memory/short_term.py` + `memory/summarizer.py`（memory_manager 依赖）
+2. `nodes/finalize.py` + `nodes/memory_write.py`（graph 依赖）
+3. `executors/react/self_refine.py`（可选开关）
 
-**Why:** 第二版技术方案已经规划好完整架构，用户按优先级渐进实现，每个模块在 `第二版技术方案.md` 中都有对应的代码示例和注释。
-**How to apply:** 当用户说「帮我实现 XXX 模块」时，先对照 `第二版技术方案.md` 中对应章节的设计，再结合已有占位文件给出实现代码。
+**How to apply:** 实现时对照 `第二版技术方案.md` 对应章节，所有节点签名统一为 `async def xxx_node(state: AgentState) -> dict:`。
