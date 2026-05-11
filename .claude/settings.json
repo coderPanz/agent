@@ -1,0 +1,18 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git commit*)",
+            "command": "printf '{\"hookSpecificOutput\":{\"hookEventName\":\"PostToolUse\",\"additionalContext\":\"git commit 已完成。请立即更新项目记忆文件 .claude/memory/ 目录（重点更新 project_agent_progress.md，记录本次新增/修改的模块、文件实现状态和当前开发阶段）。\"}}'",
+            "timeout": 5,
+            "statusMessage": "更新项目记忆..."
+          }
+        ]
+      }
+    ]
+  }
+}

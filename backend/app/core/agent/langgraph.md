@@ -18,7 +18,7 @@ pip install langgraph langchain langchain-openai
 | **Edge**  | 连接节点的线；普通边 `a → b`，条件边 `a → 分支`         |
 
 
-TypedDict 和 Pydantic 都是 Python 里用来 ** 给字典 / 数据做「类型校验」** 的工具，核心区别：
+TypedDict 和 Pydantic 都是 Python 里用来 **给字典 / 数据做「类型校验」** 的工具，核心区别：
 TypedDict：轻量、仅静态类型检查（写代码时提示，运行时不报错）
 Pydantic：功能强大、运行时强制校验（真正拦截错误数据）
 
@@ -67,10 +67,32 @@ print(result)  # {'text': 'start→A→B'}
 - State 默认是**浅合并**；如果字段是列表，推荐用 `Annotated[list, operator.add]` 实现追加而非覆盖（后面会演示）。
 
 ---
+Annotated: 给类型添加额外的元数据（metadata）
+基础语法：Annotated[真实类型, 元数据]
+```python
+from typing import Annotated
+age: Annotated[int, "年龄必须大于18"]
+```
+- int → 真正的类型
+- "年龄必须大于18" → 附加信息（metadata）
+它只是：给框架、工具、IDE、类型检查器提供额外信息。
+运行时会发生什么：  
+```python
+from typing import Annotated
+
+x: Annotated[int, "hello"] = 1
+
+print(type(x))
+# 输出：<class 'int'>
+
+```
+LangGraph State 合并策略: Annotated[list, add]
+
 
 ## 2. 对话记忆：用 MessagesState 管理历史
 
 LangGraph 预置了 `MessagesState`，帮你自动处理消息追加。
+MessagesState = 官方预设好的 TypedDict
 
 ```python
 from langgraph.graph import MessagesState
@@ -81,7 +103,43 @@ graph = StateGraph(MessagesState)
 # ...
 ```
 
+MessagesState 的 messages 字段是 Annotated[list, add_messages]，自动累加
+```python
+from langgraph.graph import StateGraph, MessagesState, START, END
+
+# 节点：接收消息，返回新消息
+def chat_model(state: MessagesState):
+    # 直接取对话历史
+    last_message = state["messages"][-1]
+    return {"messages": [f"AI 回复：{last_message}"]}
+
+# 构建图：直接用 MessagesState
+graph = StateGraph(MessagesState)
+graph.add_node("chat", chat_model)
+graph.add_edge(START, "chat")
+graph.add_edge("chat", END)
+
+# 运行
+app = graph.compile()
+response = app.invoke({"messages": ["你好"]})
+print(response["messages"])
+# ['你好', 'AI 回复：你好']
+```
+
 使用 `MessagesState` 时，节点返回 `{"messages": [AIMessage("...")]}` 就会自动追加到历史，而不是覆盖。**强烈推荐直接用这个作为 MVP 的 State 基础。**
+<!-- messagestate 结构 -->
+```python
+class MessagesState(TypedDict):
+    messages: Annotated[list[BaseMessage], add_messages]
+```
+messages 是消息对象列表，消息对象：SystemMessage、HumanMessage、AIMessage等
+消息对象结构:  
+msg.content      # 文本内容（最常用）
+msg.type         # "human" / "ai" / "tool"
+msg.name         # 角色名
+msg.tool_calls   # AI 调用的工具（如果有）
+
+
 
 ---
 
@@ -127,6 +185,10 @@ react_agent = create_react_agent(llm, [get_weather])
 
 # 然后直接在图中作为一个节点调用
 def react_node(state: MessagesState):
+  # state["messages"]
+  # state = 当前图的状态
+  # state["messages"] = 历史消息列表（用户说的 + AI 说的 + 工具返回的）
+  # 格式：[HumanMessage, AIMessage, ToolMessage, ...]
     result = react_agent.invoke({"messages": state["messages"]})
     # 只把最后一条回复作为最终答案传回
     return {"messages": result["messages"][-1:]}
@@ -154,9 +216,35 @@ def route_after_router(state: AgentState):
     else:
         return END       # 无工具需求直接结束
 
+# 从router 节点出发，执行router，记录状态 intent ，在执行 route_after_router 函数，根据 intent 决定下一步走向
+# 如果 route_after_router 返回 "react"，则执行 react 节点，对应的fn
+# 第三个参数： 把函数返回的字符串 → 映射成真正的节点名，函数返回 "react" → 跳去 "react" 节点，函数返回 END → 流程结束
 builder.add_conditional_edges("router", route_after_router, {"react": "react", END: END})
+# react 走完 - 直接结束
 builder.add_edge("react", END)
 graph = builder.compile()
+```
+
+
+**add_conditional_edges**： 它就是 LangGraph 里的「if /else 分支跳转， 流程图里的分支判断
+```txt
+builder.add_conditional_edges(
+    从哪个节点出发,
+    路由判断函数,
+    映射字典（可选）
+)
+
+          ┌──→ weather →→ react 节点
+router ───┤
+          └──→ 其他   →→ END 结束
+```
+
+普通边（add_edge）：固定走哪条路： A → B
+条件边（add_conditional_edges）：看情况走路： 
+```txt
+          ┌──→ weather →→ react 节点
+router ───┤
+          └──→ 其他   →→ END 结束
 ```
 
 运行：
@@ -204,6 +292,7 @@ def react_with_self_refine(state: MessagesState):
 ### 5.1 在需要审批的节点中调用 `interrupt`
 
 ```python
+# interrupt 是 LangGraph 中用于中断图执行的核心工具，作用是让工作流在运行到指定节点时暂停，等待外部输入 / 操作后再继续执行，是实现人机交互、人工审核、外部决策的关键功能。
 from langgraph.types import interrupt
 
 def human_approval(state: AgentState):
@@ -381,3 +470,71 @@ for event in graph.stream(Command(resume={"approved": True}), config, stream_mod
 
 ---
 
+
+## 9. create_react_agent
+create_react_agent 是 LangChain 提供的工厂函数，用来快速创建一个遵循 ReAct（Reasoning + Acting）模式的智能体（Agent）。它让大模型能用自然语言一步步思考、决定是否调用工具、并循环直到得出答案。
+```python
+def create_react_agent(
+    model: BaseLanguageModel,
+    tools: List[BaseTool],
+    prompt: PromptTemplate,
+    tools_renderer: Callable[[List[BaseTool]], str] = render_text_description,
+    stop_sequence: Union[bool, List[str]] = True,
+) -> Runnable
+```
+
+- model：大模型实例（如 ChatOpenAI、ChatAnthropic）
+- tools：工具列表（用 @tool 装饰或继承 BaseTool）
+- prompt：提示模板，必须包含 {tools}、{input}、{agent_scratchpad} 变量
+- tools_renderer：工具渲染函数
+- stop_sequence：是否自动添加停止符（默认 ["Observation:"]），防止模型继续生成幻觉内容
+
+工作流程：
+校验 Prompt：确保模板包含必需变量。
+渲染工具描述：把工具列表转成自然语言文本，插入 Prompt 的 {tools} 位置。
+设置停止序列：让模型在输出 Observation: 时暂停，等待工具返回结果。
+组装执行链：返回一个 Runnable，可被 AgentExecutor 循环调用。
+
+执行循环：用户输入 → LLM生成Thought/Action → 执行工具 → 返回Observation → 再次LLM → ... → Final Answer
+
+```python
+from langchain import hub
+from langchain.agents import AgentExecutor, create_react_agent
+from langchain_core.tools import tool
+from langchain_openai import ChatOpenAI
+
+# 1. 定义工具
+@tool
+def multiply(a: int, b: int) -> int:
+    """Multiply two numbers."""
+    return a * b
+
+tools = [multiply]
+
+# 2. 加载标准 ReAct Prompt（也可自定义）
+prompt = hub.pull("hwchase17/react")
+
+# 3. 初始化模型
+model = ChatOpenAI(model="gpt-3.5-turbo")
+
+# 4. 创建 Agent
+agent = create_react_agent(model, tools, prompt)
+
+# 5. 创建执行器并运行
+agent_executor = AgentExecutor(agent=agent, tools=tools, verbose=True)
+result = agent_executor.invoke({"input": "What is 7 multiplied by 9?"})
+print(result["output"])
+```
+
+输出：
+```plaintext
+> Entering new AgentExecutor chain...
+Thought: I need to multiply 7 and 9.
+Action: multiply
+Action Input: {"a":7,"b":9}
+Observation: 63
+Thought: I now know the final answer
+Final Answer: 63
+> Finished chain.
+63
+```
