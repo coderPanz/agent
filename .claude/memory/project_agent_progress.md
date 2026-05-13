@@ -15,7 +15,7 @@ originSessionId: f7f05be4-dddf-4c65-91a4-0fe439b4f10f
 | `langgraph.md` | LangGraph 概念学习笔记（含 MVP 代码模板） |
 | `agent 执行流程.md` | 第一版流程图设计 |
 
-## 文件实现状态（截至 2026-05-11，commit 08584f5）
+## 文件实现状态（截至 2026-05-13，commit bf6c1e3）
 
 ### P0 已实现
 
@@ -26,6 +26,7 @@ originSessionId: f7f05be4-dddf-4c65-91a4-0fe439b4f10f
 | `agent_runtime.py` | ✅ 已实现 | chat() 同步 + stream_chat() 流式两个接口 |
 | `executors/react/executor.py` | ✅ 已实现 | 手动 Thought→Action→Obs 循环，含 hallucination 防护和兜底 |
 | `executors/react/prompts.py` | ✅ 已实现 | REACT_SYSTEM_PROMPT、OBSERVATION_TEMPLATE |
+| `tools/schema.py` | ✅ 已实现 | ToolResult Pydantic 模型（tool_name/output/success/error/raw） |
 | `tools/registry.py` | ✅ 已实现 | 单例 ToolRegistry，装饰器注册，asyncio.wait_for 超时，重试 |
 
 ### P1 已实现
@@ -37,6 +38,8 @@ originSessionId: f7f05be4-dddf-4c65-91a4-0fe439b4f10f
 | `nodes/critic.py` | ✅ 已实现 | LLM 质量校验，retry_count 超限时兜底通过 |
 | `memory/manager.py` | ✅ 已实现 | MemoryManager 统一入口（短期 + summarizer） |
 | `observability/trace.py` | ✅ 已实现 | 结构化 JSON Trace，节点/工具/token/错误日志 |
+| `executors/react/self_refine.py` | ✅ 已实现 | LLM 自我修正，PASS/REVISE 协议，最多 max_rounds 次迭代 |
+| `tools/builtin.py` | ✅ 已实现（stub） | web_search / calculator 注册骨架，函数体待接入真实实现 |
 
 ### 待实现（P1/P2）
 
@@ -48,11 +51,8 @@ originSessionId: f7f05be4-dddf-4c65-91a4-0fe439b4f10f
 | `nodes/finalize.py` | 最终回复组装节点 |
 | `nodes/memory_write.py` | 记忆写回节点 |
 | `nodes/human_approval.py` | Human-in-the-loop 中断节点 |
-| `executors/react/self_refine.py` | 自我修正模块 |
 | `observability/logger.py` | 日志封装 |
 | `observability/callback_handler.py` | LangChain Callback 钩子 |
-| `tools/builtin/search.py` | 内置搜索工具 |
-| `tools/builtin/calculator.py` | 内置计算工具 |
 | `executors/base.py` | 执行器抽象基类 |
 
 ### 已删除（第一版旧文件）
@@ -61,9 +61,9 @@ originSessionId: f7f05be4-dddf-4c65-91a4-0fe439b4f10f
 
 ## 当前开发重点
 
-P0/P1 核心模块已实现，下一步按 P1→P2 顺序补全剩余节点：
+工具系统和自我修正模块已就绪，下一步优先补全 memory 子模块和 graph 依赖节点：
 1. `memory/short_term.py` + `memory/summarizer.py`（memory_manager 依赖）
 2. `nodes/finalize.py` + `nodes/memory_write.py`（graph 依赖）
-3. `executors/react/self_refine.py`（可选开关）
+3. `tools/builtin.py` 中 web_search / calculator 接入真实实现
 
 **How to apply:** 实现时对照 `第二版技术方案.md` 对应章节，所有节点签名统一为 `async def xxx_node(state: AgentState) -> dict:`。
