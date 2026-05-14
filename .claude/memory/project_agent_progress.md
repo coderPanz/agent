@@ -15,7 +15,7 @@ originSessionId: f7f05be4-dddf-4c65-91a4-0fe439b4f10f
 | `langgraph.md` | LangGraph 概念学习笔记（含 MVP 代码模板） |
 | `agent 执行流程.md` | 第一版流程图设计 |
 
-## 文件实现状态（截至 2026-05-13，commit e89c5e3）
+## 文件实现状态（截至 2026-05-14，commit 229f6eb）
 
 ### P0 已实现
 
@@ -39,7 +39,9 @@ originSessionId: f7f05be4-dddf-4c65-91a4-0fe439b4f10f
 | `memory/short_term.py` | ✅ 已实现 | in-memory dict 存储，append/get_all/trim_if_needed，生产可换 Redis |
 | `memory/summarizer.py` | ✅ 已实现 | LLM 对话历史压缩，2-3 句摘要 |
 | `memory/manager.py` | ✅ 已实现 | MemoryManager 统一入口，write_turn/get_summary，超 20 轮自动压缩 |
-| `observability/trace.py` | ✅ 已实现 | 结构化 JSON Trace，节点/工具/token/错误日志 |
+| `observability/logger.py` | ✅ 已实现 | get_logger/log_json，结构化 JSON 格式输出 |
+| `observability/callback_handler.py` | ✅ 已实现 | AgentCallbackHandler，监听 llm_start/end、tool_start/end |
+| `observability/trace.py` | ✅ 已实现 | Tracer 类，log_step/log_node/log_token/log_error，依赖 logger |
 | `executors/react/self_refine.py` | ✅ 已实现 | LLM 自我修正，PASS/REVISE 协议，最多 max_rounds 次迭代 |
 | `tools/builtin.py` | ✅ 已实现（stub） | web_search / calculator 注册骨架，函数体待接入真实实现 |
 
@@ -51,8 +53,6 @@ originSessionId: f7f05be4-dddf-4c65-91a4-0fe439b4f10f
 | `nodes/finalize.py` | 最终回复组装节点 |
 | `nodes/memory_write.py` | 记忆写回节点 |
 | `nodes/human_approval.py` | Human-in-the-loop 中断节点 |
-| `observability/logger.py` | 日志封装 |
-| `observability/callback_handler.py` | LangChain Callback 钩子 |
 | `executors/base.py` | 执行器抽象基类 |
 
 ### 已删除（第一版旧文件）
@@ -61,9 +61,9 @@ originSessionId: f7f05be4-dddf-4c65-91a4-0fe439b4f10f
 
 ## 当前开发重点
 
-memory 子模块已全部就绪，下一步补全剩余 graph 节点：
+observability 子模块已全部就绪，剩余工作集中在 graph 节点和工具接入：
 1. `nodes/finalize.py` + `nodes/memory_write.py`（graph 依赖）
 2. `tools/builtin.py` 中 web_search / calculator 接入真实实现
-3. `observability/logger.py` + `observability/callback_handler.py`（可选）
+3. `nodes/human_approval.py`（可选，Human-in-the-loop）
 
 **How to apply:** 实现时对照 `第二版技术方案.md` 对应章节，所有节点签名统一为 `async def xxx_node(state: AgentState) -> dict:`。
