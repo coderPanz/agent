@@ -15,7 +15,7 @@ originSessionId: f7f05be4-dddf-4c65-91a4-0fe439b4f10f
 | `langgraph.md` | LangGraph 概念学习笔记（含 MVP 代码模板） |
 | `agent 执行流程.md` | 第一版流程图设计 |
 
-## 文件实现状态（截至 2026-05-15，commit 7a07070）
+## 文件实现状态（截至 2026-05-15，commit cdbdf7c）
 
 ### P0 已实现
 
@@ -23,7 +23,7 @@ originSessionId: f7f05be4-dddf-4c65-91a4-0fe439b4f10f
 |------|------|------|
 | `state.py` | ✅ 已实现 | AgentState、TokenUsage、ReActStep、ToolCallRecord 完整定义 |
 | `graph.py` | ✅ 已实现 | StateGraph 节点注册 + 条件路由（含 chat_node 分支、human_approval 可选） |
-| `agent_runtime.py` | ✅ 已实现 | chat() 同步 + stream_chat() 流式，stream 已去重（只 yield 首次 final_answer） |
+| `agent_runtime.py` | ✅ 已实现 | chat() + stream_chat() + stream_events()（SSE 监控流，推送 start/node_done/tool_call/answer/done） |
 | `executors/react/executor.py` | ✅ 已实现 | 手动 Thought→Action→Obs 循环，含 hallucination 防护和兜底 |
 | `executors/react/prompts.py` | ✅ 已实现 | REACT_SYSTEM_PROMPT、OBSERVATION_TEMPLATE |
 | `tools/schema.py` | ✅ 已实现 | ToolResult Pydantic 模型（tool_name/output/success/error/raw） |
@@ -50,11 +50,19 @@ originSessionId: f7f05be4-dddf-4c65-91a4-0fe439b4f10f
 | `tools/builtin.py` | ✅ 已实现（stub） | web_search / calculator 注册骨架，函数体待接入真实实现 |
 | `demo.py` | ✅ 已实现（新增） | 端到端测试入口：普通对话 / 工具调用 / 流式输出三个示例，均已验证通过 |
 
+### API 层（已接入）
+
+| 文件 | 状态 | 说明 |
+|------|------|------|
+| `app/api/routes.py` | ✅ 已实现 | `POST /agent_chat`（异步）+ `POST /agent/stream`（SSE 监控） |
+| `app/api/schemas.py` | ✅ 已实现 | `AgentChatRequest/Response` + `AgentStreamRequest` |
+
 ### 服务层变更
 
 | 文件 | 变更 |
 |------|------|
 | `app/services/llm.py` | 从 `openai.OpenAI` 改为 `langchain_openai.ChatOpenAI`，支持 `ainvoke` |
+| `app/services/agent.py` | 已清空旧代码（原引用已删除模块），路由直接使用 `_runtime` 单例 |
 
 ### 待实现（P2）
 
@@ -70,10 +78,14 @@ originSessionId: f7f05be4-dddf-4c65-91a4-0fe439b4f10f
 
 ## 当前开发阶段
 
-**Agent 核心链路已全部打通**，demo.py 三个示例（普通对话、工具调用、流式输出）均可正常运行。
+**Agent 核心链路 + API 层已全部打通**，包含：
+- `POST /agent_chat` 完整对话接口
+- `POST /agent/stream` SSE 监控流（事件：start / node_done / tool_call / answer / done）
+- 前端可直接用 `EventSource` 或 `fetch` + `ReadableStream` 消费
+
 下一步工作：
 1. `tools/builtin.py` 中 web_search / calculator 接入真实实现
 2. `memory/long_term.py` 长期记忆
-3. API 层（FastAPI 路由）接入 AgentRuntime
+3. 前端 SSE 监控面板 UI 实现
 
 **How to apply:** 所有节点签名统一为 `async def xxx_node(state: AgentState) -> dict:`；LLM 客户端统一用 `init_llm_client()` 获取 ChatOpenAI 实例。
