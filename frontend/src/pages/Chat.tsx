@@ -1,10 +1,22 @@
 import { useState, useRef, useEffect } from 'react'
-import { api } from '../api/client'
+import { agentStream } from '../api/client'
 import '../styles/chat.css'
+
+interface ProgressCard {
+  kind: 'node' | 'tool'
+  label: string
+  detail?: string
+}
 
 interface Message {
   role: 'user' | 'assistant'
   content: string
+  cards?: ProgressCard[]
+}
+
+interface StreamingMsg {
+  cards: ProgressCard[]
+  answer: string
 }
 
 interface ChatPageProps {
@@ -14,7 +26,7 @@ interface ChatPageProps {
 export function ChatPage({ onFirstMessage }: ChatPageProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
-  const [loading, setLoading] = useState(false)
+  const [streaming, setStreaming] = useState<StreamingMsg | null>(null)
   const [error, setError] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -22,7 +34,7 @@ export function ChatPage({ onFirstMessage }: ChatPageProps) {
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [messages, loading])
+  }, [messages, streaming])
 
   function autoResize() {
     const el = textareaRef.current
@@ -33,7 +45,7 @@ export function ChatPage({ onFirstMessage }: ChatPageProps) {
 
   async function handleSend() {
     const q = input.trim()
-    if (!q || loading) return
+    if (!q || streaming !== null) return
     setInput('')
     setError(null)
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
@@ -44,14 +56,48 @@ export function ChatPage({ onFirstMessage }: ChatPageProps) {
       onFirstMessage(q.slice(0, 40))
     }
 
-    setLoading(true)
+    // 本次积累的进度卡和回答（用于最终写入 messages）
+    const accCards: ProgressCard[] = []
+    let accAnswer = ''
+
+    setStreaming({ cards: [], answer: '' })
+
     try {
-      const answer = await api.agentChat(q)
-      setMessages(prev => [...prev, { role: 'assistant', content: answer }])
+      for await (const evt of agentStream(q)) {
+        if (evt.type === 'node_done') {
+          accCards.push({ kind: 'node', label: evt.label, detail: evt.detail })
+          setStreaming({ cards: [...accCards], answer: accAnswer })
+
+        } else if (evt.type === 'tool_call') {
+          const detail = Object.entries(evt.tools)
+            .map(([name, count]) => `${name} ×${count}`)
+            .join('、')
+          accCards.push({ kind: 'tool', label: `已调用工具 ${evt.total} 次`, detail })
+          setStreaming({ cards: [...accCards], answer: accAnswer })
+
+        } else if (evt.type === 'answer') {
+          accAnswer = evt.content
+          setStreaming({ cards: [...accCards], answer: accAnswer })
+
+        } else if (evt.type === 'error') {
+          setError(evt.content)
+        }
+        // 'start' 和 'done' 无需处理，for-await 结束时自然退出
+      }
+
+      // 流结束，写入最终消息
+      setMessages(prev => [
+        ...prev,
+        {
+          role: 'assistant',
+          content: accAnswer || '（未收到回答）',
+          cards: accCards.length > 0 ? accCards : undefined,
+        },
+      ])
     } catch (e) {
       setError(e instanceof Error ? e.message : '请求失败')
     } finally {
-      setLoading(false)
+      setStreaming(null)
     }
   }
 
@@ -61,6 +107,8 @@ export function ChatPage({ onFirstMessage }: ChatPageProps) {
       handleSend()
     }
   }
+
+  const loading = streaming !== null
 
   const inputBox = (placeholder: string, rows: number) => (
     <div className="chat-input-box">
@@ -85,7 +133,7 @@ export function ChatPage({ onFirstMessage }: ChatPageProps) {
     </div>
   )
 
-  if (messages.length === 0) {
+  if (messages.length === 0 && streaming === null) {
     return (
       <div className="chat-welcome">
         <h1 className="welcome-title">有什么我可以帮你的？</h1>
@@ -99,14 +147,41 @@ export function ChatPage({ onFirstMessage }: ChatPageProps) {
       <div className="chat-messages">
         {messages.map((msg, i) => (
           <div key={i} className={`message message-${msg.role}`}>
-            <div className="message-bubble">{msg.content}</div>
+            {msg.role === 'assistant' ? (
+              <div className="message-content">
+                {msg.cards && msg.cards.length > 0 && (
+                  <div className="progress-list">
+                    {msg.cards.map((card, j) => (
+                      <ProgressCardView key={j} card={card} />
+                    ))}
+                  </div>
+                )}
+                <div className="message-bubble">{msg.content}</div>
+              </div>
+            ) : (
+              <div className="message-bubble">{msg.content}</div>
+            )}
           </div>
         ))}
 
-        {loading && (
+        {/* 流式进行中的消息 */}
+        {streaming !== null && (
           <div className="message message-assistant">
-            <div className="message-bubble loading">
-              <span className="dot" /><span className="dot" /><span className="dot" />
+            <div className="message-content">
+              {streaming.cards.length > 0 && (
+                <div className="progress-list">
+                  {streaming.cards.map((card, j) => (
+                    <ProgressCardView key={j} card={card} active />
+                  ))}
+                </div>
+              )}
+              {streaming.answer ? (
+                <div className="message-bubble">{streaming.answer}</div>
+              ) : (
+                <div className="message-bubble loading">
+                  <span className="dot" /><span className="dot" /><span className="dot" />
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -118,6 +193,20 @@ export function ChatPage({ onFirstMessage }: ChatPageProps) {
       <footer className="chat-footer">
         {inputBox('继续提问...', 1)}
       </footer>
+    </div>
+  )
+}
+
+// ── 进度卡片组件 ──────────────────────────────────────────────
+function ProgressCardView({ card, active }: { card: ProgressCard; active?: boolean }) {
+  const icon = card.kind === 'tool' ? '⚙' : '✓'
+  return (
+    <div className={`progress-card${active ? ' progress-card-active' : ''}`}>
+      <span className="progress-card-icon">{icon}</span>
+      <span className="progress-card-label">{card.label}</span>
+      {card.detail && (
+        <span className="progress-card-detail">{card.detail}</span>
+      )}
     </div>
   )
 }

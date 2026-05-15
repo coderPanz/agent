@@ -1,5 +1,47 @@
 const API_BASE = '/api'
 
+// ── Agent SSE 事件类型 ─────────────────────────────────────────
+export type AgentEvent =
+  | { type: 'start';     session_id: string }
+  | { type: 'node_done'; name: string; label: string; detail?: string }
+  | { type: 'tool_call'; tools: Record<string, number>; total: number }
+  | { type: 'answer';    content: string }
+  | { type: 'error';     content: string }
+  | { type: 'done' }
+
+// 读取 POST /agent/stream 的 SSE 流，逐事件 yield
+export async function* agentStream(
+  query: string,
+  sessionId?: string,
+): AsyncGenerator<AgentEvent> {
+  const res = await fetch(`${API_BASE}/agent/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query, session_id: sessionId ?? null }),
+  })
+  if (!res.ok) throw new Error(`请求失败 (HTTP ${res.status})`)
+
+  const reader = res.body!.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+
+    buffer += decoder.decode(value, { stream: true })
+    // SSE 消息以 \n\n 分隔
+    const parts = buffer.split('\n\n')
+    buffer = parts.pop() ?? ''
+
+    for (const part of parts) {
+      const line = part.trim()
+      if (!line.startsWith('data: ')) continue
+      yield JSON.parse(line.slice(6)) as AgentEvent
+    }
+  }
+}
+
 export interface RAGSearchRequest {
   query: string
   mode: 'agentic' | 'common'
