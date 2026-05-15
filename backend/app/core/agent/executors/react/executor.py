@@ -45,10 +45,11 @@ def _parse_llm_output(text: str) -> dict:
       thought_match.end()     # 匹配结束位置
     """
     thought_match = THOUGHT_RE.search(text)
-    result["thought"] = thought.group(1).strip() if thought_match else ""
+    result["thought"] = thought_match.group(1).strip() if thought_match else ""
 
     final_match = FINAL_ANSWER_RE.search(text)
-    result["final_answer"] = final_match.group(1).strip() if final_match else ""
+    if final_match:
+        result["final_answer"] = final_match.group(1).strip()
 
     action_match = ACTION_RE.search(text)
     result["action_match"] = action_match.group(1).strip() if action_match else ""
@@ -68,7 +69,7 @@ async def react_executor_node(state: AgentState) -> dict:
 
     # 1. 初始化 llm-tool-trace
     llm_client = init_llm_client()
-    registry = ToolCallRecord.get_instance()
+    registry = ToolRegistry.get_instance()
     tracer = Tracer(session_id=state.session_id)
 
     # 2. though
@@ -88,8 +89,8 @@ async def react_executor_node(state: AgentState) -> dict:
     ]
 
     # ── ReAct 主循环 ───────────────────────────────────────
-    react_steps = list[ReActStep] = []
-    tool_calls = list[ToolCallRecord] = []
+    react_steps: list[ReActStep] = []
+    tool_calls: list[ToolCallRecord] = []
     current_step = state.current_step
 
     for step in range(current_step, state.max_steps):
@@ -167,15 +168,15 @@ async def react_executor_node(state: AgentState) -> dict:
         await tracer.log_step_end(step, action_name, observation)
 
 
-      # 超出 max_steps 时兜底回复
-      fallback = "已达到最大推理步数，无法得出明确答案，请换一种方式提问。"
-      return {
-          "final_answer": fallback,
-          "react_steps": react_steps,
-          "tool_calls": tool_calls,
-          "current_step": state.max_steps,
-          "messages": [AIMessage(content=fallback)],
-      }
+    # 超出 max_steps 时兜底回复
+    fallback = "已达到最大推理步数，无法得出明确答案，请换一种方式提问。"
+    return {
+        "final_answer": fallback,
+        "react_steps": react_steps,
+        "tool_calls": tool_calls,
+        "current_step": state.max_steps,
+        "messages": [AIMessage(content=fallback)],
+    }
 
     # 4. observation 过程
 

@@ -1,6 +1,6 @@
 """Agent-Router: 意图识别"""
 import json
-from langchain_core.message import SystemMessage, HumanMessage
+from langchain_core.messages import SystemMessage, HumanMessage
 from app.core.agent.state import AgentState, IntentType
 from app.services.llm import init_llm_client
 

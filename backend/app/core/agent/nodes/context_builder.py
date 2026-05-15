@@ -20,9 +20,9 @@ step：步长（隔几个取一个，默认 1）
 省略 step → 步长为 1，逐个取
 
 """
-from langchain_core.message import BaseMessage
+from langchain_core.messages import BaseMessage
 from app.core.agent.state import AgentState
-from app.core.agent.memory.manager import MemorySaver
+from app.core.agent.memory.manager import MemoryManager
 
 # token 计算
 def _estimate_tokens(text: str) -> int:
@@ -50,13 +50,13 @@ async def context_builder_node(state: AgentState) -> dict:
     summary = await memory_mgr.get_summary()
 
     # ── 2. 格式化最近对话──────────────────────────────────
-    recent_dialogue = _format_message(state.message, max_turns=8)
+    recent_dialogue = _format_message(state.messages, max_turns=8)
 
     # ── 3. RAG【后续接入】 ──────────────────────────────────
     rag_text = "\n".join(state.rag_results) if state.rag_results else ""
 
     # ── 4. 按优先级组装，并做 Token 预算裁剪 ──────────────
-    budget = state.token_usage_budget
+    budget = state.token_usage.budget
     parts = []
 
     # 高优先级：任务目标（固定，不裁剪）

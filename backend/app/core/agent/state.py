@@ -1,19 +1,4 @@
 """Agent-State: 定义流经所有节点的数据结构"""
-"""
-开启「延迟注解求值」
-在没有这条语句时，Python 会立即执行类型注解：
-- 写前向引用（类还没定义就用它做注解）会直接报错
-- 复杂类型注解会拖慢代码加载速度
-- 循环引用的类注解会卡死
-不加 from __future__ import annotations 会报错！
-class Node:
-    # 这里用到了 Node，但类还没定义完
-    def get_next(self) -> Node:
-        return self.next
-报错：NameError: name 'Node' is not defined
-加上这行代码，Python 不会立刻计算注解，而是把注解存成字符串，等需要时再解析：
-"""
-
 from __future__ import annotations
 # Literal是类型注解，表示字面量类型 Annotated: 给类型附加额外信息，不影响类型本身，但能给工具 / 框架用。
 from typing import Annotated, Any, Literal

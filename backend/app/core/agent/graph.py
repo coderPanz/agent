@@ -12,6 +12,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from app.core.agent.state import AgentState
 from app.core.agent.nodes.router import router_node
 from app.core.agent.nodes.context_builder import context_builder_node
+from app.core.agent.nodes.chat import chat_node
 from app.core.agent.nodes.critic import critic_node
 from app.core.agent.nodes.finalize import finalize_node
 from app.core.agent.nodes.memory_write import memory_write_node
@@ -23,7 +24,7 @@ def _route_after_router(state: AgentState) -> str:
     """Router 之后的路由函数：根据意图跳转到不同分支"""
     if state.intent in ("react", "rag"):
         return "context_builder"
-    return "finalize"   # 普通聊天直接结束
+    return "chat"   # 普通聊天走 chat_node
 
 def _route_after_critic(state: AgentState) -> str:
     """Critic 之后的路由函数：通过→结束, 不通过且未超限→重试"""
@@ -31,7 +32,7 @@ def _route_after_critic(state: AgentState) -> str:
         return "react_executor"   # 重试
     return "finalize"
 
-def build_graph(use_human_approval: bool: False) -> StateGraph:
+def build_graph(use_human_approval: bool = False) -> StateGraph:
     """
     构建主状态机图。
     use_human_approval=True 时在 finalize 前插入人工审批节点。
@@ -40,6 +41,7 @@ def build_graph(use_human_approval: bool: False) -> StateGraph:
 
     # ── 注册所有节点 ──
     builder.add_node("router", router_node)
+    builder.add_node("chat", chat_node)
     builder.add_node("context_builder", context_builder_node)
     builder.add_node("react_executor", react_executor_node)
     builder.add_node("critic", critic_node)
@@ -56,10 +58,11 @@ def build_graph(use_human_approval: bool: False) -> StateGraph:
     builder.add_conditional_edges(
         "router",
         _route_after_router,
-        {"context_builder": "context_builder", "finalize": "finalize"},
+        {"context_builder": "context_builder", "chat": "chat"},
     )
 
     # ── 固定边 ──
+    builder.add_edge("chat", "finalize")
     builder.add_edge("context_builder", "react_executor")
     builder.add_edge("react_executor", "critic")
 
@@ -84,8 +87,8 @@ def build_graph(use_human_approval: bool: False) -> StateGraph:
 
     return builder
 
-def compile_graph(use_human_approval: bool = False) -> CompiledGraph:
-  """编译图，返回可运行的 CompiledGraph"""
-  builder = build_graph()
-  cp = checkpointer or MemorySaver()   # 默认使用内存 checkpointer
-  return builder.compile(checkpointer=cp)
+def compile_graph(use_human_approval: bool = False, checkpointer=None):
+    """编译图，返回可运行的 CompiledGraph"""
+    builder = build_graph(use_human_approval)
+    cp = checkpointer or MemorySaver()
+    return builder.compile(checkpointer=cp)
