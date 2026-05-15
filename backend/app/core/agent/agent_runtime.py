@@ -1,8 +1,7 @@
 """Agent-Runtime: 入口、流式输出、异常恢复、生命周期"""
 
 import uuid
-# 异步迭代器的标准类型
-from typing import AsyncIterator
+from typing import AsyncIterator, AsyncGenerator
 from langchain_core.messages import HumanMessage
 from app.core.agent.state import AgentState, TokenUsage
 from app.core.agent.graph import compile_graph
@@ -60,6 +59,96 @@ class AgentRuntime:
             if not yielded and chunk.get("final_answer"):
                 yield chunk["final_answer"]
                 yielded = True
+
+    async def stream_events(
+        self, query: str, session_id: str | None, user_id: str = ""
+    ) -> AsyncGenerator[dict, None]:
+        """
+        细粒度事件流，推送节点进度 + 工具调用 + 最终回答。
+        前端通过 SSE 消费，用于渲染监控面板。
+
+        事件类型：
+          start      — 开始处理，携带 session_id
+          node_done  — 某节点执行完毕，detail 字段补充摘要
+          tool_call  — react_executor 完成后的工具调用汇总
+          answer     — 最终回答（完整文本）
+          error      — 运行时异常
+          done       — 流结束
+        """
+        session_id = session_id or str(uuid.uuid4())
+        initial_state = self._build_initial_state(query, session_id, user_id)
+        config = {"configurable": {"thread_id": session_id}}
+
+        NODE_LABELS: dict[str, str] = {
+            "router":          "意图识别",
+            "chat":            "生成回答",
+            "context_builder": "构建上下文",
+            "react_executor":  "思考推理",
+            "critic":          "质量检验",
+            "memory_write":    "记忆更新",
+        }
+
+        answer_sent = False
+
+        try:
+            yield {"type": "start", "session_id": session_id}
+
+            async for chunk in self._graph.astream(
+                initial_state, config=config, stream_mode="updates"
+            ):
+                # chunk = {node_name: node_output_dict}
+                for node_name, node_output in chunk.items():
+                    if node_name not in NODE_LABELS:
+                        continue
+
+                    label = NODE_LABELS[node_name]
+
+                    if node_name == "router":
+                        intent = node_output.get("intent", "unknown")
+                        yield {"type": "node_done", "name": node_name, "label": label, "detail": intent}
+
+                    elif node_name == "react_executor":
+                        # 工具调用汇总
+                        tool_calls = node_output.get("tool_calls") or []
+                        if tool_calls:
+                            tool_summary = {}
+                            for tc in tool_calls:
+                                name = tc.tool_name if hasattr(tc, "tool_name") else tc.get("tool_name", "unknown")
+                                tool_summary[name] = tool_summary.get(name, 0) + 1
+                            yield {
+                                "type": "tool_call",
+                                "tools": tool_summary,
+                                "total": len(tool_calls),
+                            }
+
+                        steps = node_output.get("react_steps") or []
+                        yield {
+                            "type": "node_done",
+                            "name": node_name,
+                            "label": label,
+                            "detail": f"{len(steps)} 步推理",
+                        }
+
+                        final_answer = node_output.get("final_answer", "")
+                        if final_answer and not answer_sent:
+                            yield {"type": "answer", "content": final_answer}
+                            answer_sent = True
+
+                    elif node_name == "chat":
+                        final_answer = node_output.get("final_answer", "")
+                        if final_answer and not answer_sent:
+                            yield {"type": "answer", "content": final_answer}
+                            answer_sent = True
+                        yield {"type": "node_done", "name": node_name, "label": label}
+
+                    else:
+                        yield {"type": "node_done", "name": node_name, "label": label}
+
+            yield {"type": "done"}
+
+        except Exception as e:
+            yield {"type": "error", "content": str(e)}
+            yield {"type": "done"}
 
 
 

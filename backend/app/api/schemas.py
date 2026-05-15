@@ -118,3 +118,10 @@ class AgentChatRequest(BaseModel):
 class AgentChatResponse(BaseModel):
     """Agent-对话响应"""
     answer: str
+
+
+class AgentStreamRequest(BaseModel):
+    """Agent-SSE 流式监控请求"""
+    query: str
+    session_id: str | None = None
+    user_id: str = ""

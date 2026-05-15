@@ -1,4 +1,6 @@
+import json
 from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
 from app.api.schemas import (
     HealthResponse,
     RAGResponse,
@@ -17,6 +19,7 @@ from app.api.schemas import (
     GetKnowledgeBaseDocumentRequest,
     AgentChatRequest,
     AgentChatResponse,
+    AgentStreamRequest,
 )
 from app.services.rag import (
     rag_search as rag_search_service,
@@ -31,7 +34,9 @@ from app.services.rag import (
     get_knowledge_base_document_service,
     list_knowledge_base_documents_service,
 )
-from app.services.agent import agent_chat_service
+from app.core.agent.agent_runtime import AgentRuntime
+
+_runtime = AgentRuntime()
 
 router = APIRouter()
 
@@ -111,5 +116,36 @@ def list_knowledge_base_documents(knowledge_base_id: int, skip: int = 0, limit: 
 
 """====================Agent-对话====================="""
 @router.post("/agent_chat", response_model=AgentChatResponse, tags=["agent"])
-def agent_chat(request: AgentChatRequest) -> AgentChatResponse:
-    return AgentChatResponse(answer=agent_chat_service(request.query))
+async def agent_chat(request: AgentChatRequest) -> AgentChatResponse:
+    answer = await _runtime.chat(request.query, session_id=None)
+    return AgentChatResponse(answer=answer)
+
+
+"""====================Agent-SSE 监控流====================="""
+@router.post("/agent/stream", tags=["agent"])
+async def agent_stream(request: AgentStreamRequest) -> StreamingResponse:
+    """
+    SSE 事件流接口，前端通过此接口实时监控 Agent 执行过程。
+
+    事件格式（每行以 "data: " 开头，空行分隔）：
+      data: {"type": "start",     "session_id": "..."}
+      data: {"type": "node_done", "name": "router", "label": "意图识别", "detail": "chat"}
+      data: {"type": "tool_call", "tools": {"web_search": 3}, "total": 3}
+      data: {"type": "node_done", "name": "react_executor", "label": "思考推理", "detail": "2 步推理"}
+      data: {"type": "answer",    "content": "最终回答..."}
+      data: {"type": "done"}
+    """
+    async def event_generator():
+        async for evt in _runtime.stream_events(
+            request.query, request.session_id, request.user_id
+        ):
+            yield f"data: {json.dumps(evt, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",   # 禁用 nginx 缓冲，保证实时推送
+        },
+    )
