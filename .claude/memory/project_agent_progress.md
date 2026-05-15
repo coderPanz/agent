@@ -16,7 +16,7 @@ originSessionId: f7f05be4-dddf-4c65-91a4-0fe439b4f10f
 | `langgraph.md` | LangGraph 概念学习笔记（含 MVP 代码模板） |
 | `agent 执行流程.md` | 第一版流程图设计 |
 
-## 文件实现状态（截至 2026-05-15，commit cdbdf7c）
+## 文件实现状态（截至 2026-05-15，commit 0c086f6）
 
 ### P0 已实现
 
@@ -58,6 +58,14 @@ originSessionId: f7f05be4-dddf-4c65-91a4-0fe439b4f10f
 | `app/api/routes.py` | ✅ 已实现 | `POST /agent_chat`（异步）+ `POST /agent/stream`（SSE 监控） |
 | `app/api/schemas.py` | ✅ 已实现 | `AgentChatRequest/Response` + `AgentStreamRequest` |
 
+### 前端（已接入）
+
+| 文件 | 状态 | 说明 |
+|------|------|------|
+| `frontend/src/api/client.ts` | ✅ 已实现 | `AgentEvent` 联合类型 + `agentStream()` 异步生成器（SSE 解析） |
+| `frontend/src/pages/Chat.tsx` | ✅ 已实现 | 使用 `agentStream` 替换旧 `agentChat`；streaming 状态实时渲染进度卡片 |
+| `frontend/src/styles/chat.css` | ✅ 已实现 | `.progress-card` / `.progress-list` 样式 |
+
 ### 服务层变更
 
 | 文件 | 变更 |
@@ -79,14 +87,16 @@ originSessionId: f7f05be4-dddf-4c65-91a4-0fe439b4f10f
 
 ## 当前开发阶段
 
-**Agent 核心链路 + API 层已全部打通**，包含：
-- `POST /agent_chat` 完整对话接口
-- `POST /agent/stream` SSE 监控流（事件：start / node_done / tool_call / answer / done）
-- 前端可直接用 `EventSource` 或 `fetch` + `ReadableStream` 消费
+**全栈链路已打通**：前端 → SSE → Agent → LLM，进度卡片实时渲染。
+
+触发 react 调用链（显示完整进度卡）的问题类型：
+- "计算 123 * 456"、"用 calculator 计算..." → `react` 意图，走完整链路
+- "帮我搜索一下..."、"查询..." → `react` 意图（tools 当前为 stub，会提示无工具）
+- 普通对话（"你好"）→ `chat` 意图，只显示「意图识别」+「生成回答」两张卡片
 
 下一步工作：
-1. `tools/builtin.py` 中 web_search / calculator 接入真实实现
+1. `tools/builtin.py` 中 web_search / calculator 接入真实实现（Tavily / eval）
 2. `memory/long_term.py` 长期记忆
-3. 前端 SSE 监控面板 UI 实现
+3. 进度卡片可折叠展开（现在只展示 label + detail，不可交互）
 
 **How to apply:** 所有节点签名统一为 `async def xxx_node(state: AgentState) -> dict:`；LLM 客户端统一用 `init_llm_client()` 获取 ChatOpenAI 实例。
