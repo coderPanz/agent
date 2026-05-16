@@ -13,6 +13,7 @@ originSessionId: f7f05be4-dddf-4c65-91a4-0fe439b4f10f
 | `第一版技术方案.md` | 第一版 prompt，描述整体需求和流程设计 |
 | `第二版技术方案.md` | **核心参考文档**，包含完整架构设计 + 14 章代码示例（2026-05-11 生成） |
 | `第三版实现细节方案.md` | **落地记录**，覆盖新增节点、Bug 修复清单、SSE 监控流设计、前端接入示例（2026-05-15 生成） |
+| `天气查询功能实现方案.md` | 工具能力扩展示例，包含 WeatherService、tool 注册、API 接入、测试方案（2026-05-16 新增） |
 | `langgraph.md` | LangGraph 概念学习笔记（含 MVP 代码模板） |
 | `agent 执行流程.md` | 第一版流程图设计 |
 
@@ -63,8 +64,9 @@ originSessionId: f7f05be4-dddf-4c65-91a4-0fe439b4f10f
 | 文件 | 状态 | 说明 |
 |------|------|------|
 | `frontend/src/api/client.ts` | ✅ 已实现 | `AgentEvent` 联合类型 + `agentStream()` 异步生成器（SSE 解析） |
-| `frontend/src/pages/Chat.tsx` | ✅ 已实现 | 使用 `agentStream` 替换旧 `agentChat`；streaming 状态实时渲染进度卡片 |
-| `frontend/src/styles/chat.css` | ✅ 已实现 | `.progress-card` / `.progress-list` 样式 |
+| `frontend/src/pages/Chat.tsx` | ✅ 已实现（改进） | 集成 `react-markdown`；实时渲染进度卡片 + Markdown 格式答案 |
+| `frontend/src/styles/chat.css` | ✅ 已实现（扩展） | `.progress-card` / `.progress-list` 样式 + Markdown 渲染样式（标题、列表、代码、表格等） |
+| `frontend/vite.config.ts` | ✅ 已修复 | 代理端口从 8002 改为 8000，对接后端服务 |
 
 ### 服务层变更
 
@@ -87,16 +89,36 @@ originSessionId: f7f05be4-dddf-4c65-91a4-0fe439b4f10f
 
 ## 当前开发阶段
 
-**全栈链路已打通**：前端 → SSE → Agent → LLM，进度卡片实时渲染。
+**全栈可用**：前端 → SSE → Agent → LLM，进度卡片实时渲染 + Markdown 格式输出。
 
-触发 react 调用链（显示完整进度卡）的问题类型：
-- "计算 123 * 456"、"用 calculator 计算..." → `react` 意图，走完整链路
-- "帮我搜索一下..."、"查询..." → `react` 意图（tools 当前为 stub，会提示无工具）
-- 普通对话（"你好"）→ `chat` 意图，只显示「意图识别」+「生成回答」两张卡片
+### 已验证通过的测试场景
 
-下一步工作：
-1. `tools/builtin.py` 中 web_search / calculator 接入真实实现（Tavily / eval）
-2. `memory/long_term.py` 长期记忆
-3. 进度卡片可折叠展开（现在只展示 label + detail，不可交互）
+| 场景 | 输入示例 | 执行链路 | 状态 |
+|------|---------|--------|------|
+| 简单对话 | "你好" / "你是谁？" | chat 意图 → chat_node → 答案 | ✅ 可用 |
+| ReAct 循环 | "计算 123 × 456" | react 意图 → context_builder → react_executor → answer | ✅ 可用 |
+| 完整工具调用 | （工具函数需接入真实实现） | → tool_call 事件推送 | ⏳ 工具待接入 |
+| 前端显示 | 任意输入 | Markdown 渲染 + 进度卡片 | ✅ 可用 |
 
-**How to apply:** 所有节点签名统一为 `async def xxx_node(state: AgentState) -> dict:`；LLM 客户端统一用 `init_llm_client()` 获取 ChatOpenAI 实例。
+### 工具扩展准备
+
+已提供天气查询工具的完整实现文档（`天气查询功能实现方案.md`），用户可参考该文档实现以下工具：
+- `weather_query(city, days)` — 天气查询（支持 Mock 和 OpenWeather API）
+- 参考文档包含：工具服务层实现、tool 注册装饰器、测试用例、部署配置
+
+**工具扩展模式**：
+1. 创建服务模块 (`tools/xxxx.py`)
+2. 在 `tools/builtin.py` 中用 `@registry.register()` 注册
+3. LLM 自动识别意图并调用，ReAct Executor 处理工具结果
+
+### 下一步工作优先级
+
+| 优先级 | 任务 | 说明 |
+|--------|------|------|
+| **P1** | 实现天气查询工具 | 参考提供的实现文档，手动编码（预计 1-2 小时） |
+| **P1** | 接入 web_search / calculator | 调用 Tavily API / eval()，接线到 `tools/builtin.py` |
+| **P2** | 长期记忆（`memory/long_term.py`） | 向量数据库 + 语义检索 |
+| **P2** | 进度卡片交互 | 可折叠展开、显示工具调用明细 |
+| **P3** | 多 Agent 编排 | LangGraph Supervisor 模式 |
+
+**How to apply:** 所有节点签名统一为 `async def xxx_node(state: AgentState) -> dict:`；LLM 客户端统一用 `init_llm_client()` 获取 ChatOpenAI 实例；所有工具通过 `@registry.register()` 装饰器注册。
