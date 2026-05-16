@@ -6,6 +6,7 @@ from langchain_core.messages import HumanMessage
 from app.core.agent.state import AgentState, TokenUsage
 from app.core.agent.graph import compile_graph
 from app.core.agent.observability.trace import Tracer
+import app.core.agent.tools.builtin  # noqa: F401 — 触发工具注册装饰器
 
 
 class AgentRuntime:

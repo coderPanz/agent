@@ -14,7 +14,7 @@ weather_service = WeatherService()
   max_retry=1,
 )
 async def web_search(query: str) -> str:
-    pass
+    return "【工具未接入】web_search 暂未实现，请使用已有工具完成任务。"
 
 
 @registry.register(
@@ -24,7 +24,7 @@ async def web_search(query: str) -> str:
   max_retry=1,
 )
 async def calculator(expression: str) -> str:
-    pass
+    return "【工具未接入】calculator 暂未实现，请使用已有工具完成任务。"
 
 
 
@@ -47,39 +47,36 @@ async def weather_query(city: str, days: int = 1) -> str:
         格式化的天气信息文本
     """
     try:
-        # 验证天数参数
-        if days not in (1, 3, 7):
-            days = min(7, max(1, days))
+        days = min(max(days, 1), 4)  # 高德最多支持 4 天预报
 
-        # 调用天气服务
         result = await weather_service.query(city, days)
-        
-        # 检查错误
+
         if "error" in result:
-            return f"查询失败， {result['error']}"
+            return f"查询失败：{result['error']}"
 
+        province = result.get("province", "")
+        city_label = result.get("city", city)
+        output = f"【{province}{city_label} 天气信息】\n\n"
 
-        # 格式化输出
-        output = f"【{result['city']} {result.get('country', '')} 天气信息】\n\n"
-        
-        # 当前天气
         current = result.get("current", {})
-        output += f"🌡️ 当前天气:\n"
-        output += f"  温度: {current.get('temp', 'N/A')}°C (体感 {current.get('feels_like', 'N/A')}°C)\n"
-        output += f"  天气: {current.get('description', 'N/A')} - {current.get('detail', '')}\n"
+        output += "当前天气:\n"
+        output += f"  温度: {current.get('temp', 'N/A')}°C\n"
+        output += f"  天气: {current.get('description', 'N/A')}\n"
         output += f"  湿度: {current.get('humidity', 'N/A')}%\n"
-        output += f"  风力: {current.get('wind_direction', 'N/A')} {current.get('wind_speed', 'N/A')} m/s\n\n"
-        
-        # 未来预报
+        output += f"  风向风力: {current.get('wind_direction', 'N/A')} {current.get('wind_speed', 'N/A')} 级\n"
+        output += f"  发布时间: {current.get('report_time', 'N/A')}\n\n"
+
         forecast = result.get("forecast", [])
         if forecast:
-            output += f"📅 {days}天预报:\n"
+            output += f"{days}天预报:\n"
             for item in forecast:
-                output += f"  {item.get('date', 'N/A')}: "
-                output += f"{item.get('description', 'N/A')} "
-                output += f"{item.get('temp_min', 'N/A')}-{item.get('temp_max', 'N/A')}°C "
-                output += f"降水概率 {item.get('rain_probability', 'N/A')}%\n"
-        
+                output += (
+                    f"  {item.get('date', 'N/A')} (周{item.get('week', '?')}): "
+                    f"白天{item.get('description', 'N/A')} / 夜间{item.get('night_description', 'N/A')}  "
+                    f"{item.get('temp_min', 'N/A')}-{item.get('temp_max', 'N/A')}°C  "
+                    f"{item.get('wind_direction', 'N/A')}{item.get('wind_power', 'N/A')}级\n"
+                )
+
         return output
     
     except Exception as e:
