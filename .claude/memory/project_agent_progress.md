@@ -75,9 +75,10 @@ originSessionId: f7f05be4-dddf-4c65-91a4-0fe439b4f10f
 | 文件 | 状态 | 说明 |
 |------|------|------|
 | `frontend/src/api/client.ts` | ✅ 已实现 | `AgentEvent` 联合类型 + `agentStream()` 异步生成器（SSE 解析） |
-| `frontend/src/pages/Chat.tsx` | ✅ 已实现（改进） | 集成 `react-markdown`；实时渲染进度卡片 + Markdown 格式答案 |
-| `frontend/src/styles/chat.css` | ✅ 已实现（扩展） | `.progress-card` / `.progress-list` 样式 + Markdown 渲染样式（标题、列表、代码、表格等） |
-| `frontend/vite.config.ts` | ✅ 已修复 | 代理端口从 8002 改为 8000，对接后端服务 |
+| `frontend/src/api/client.ts` | ✅ 已更新 | 新增 `ReActStep` / `ToolDetail` 类型；`node_done` 携带 `elapsed_ms` / `steps` / `tool_details` |
+| `frontend/src/pages/Chat.tsx` | ✅ 已重构 | 可展开 `ExecutionCard`：默认显示节点名+耗时，展开后显示思考/调用/结果；去掉独立 tool_call 卡片 |
+| `frontend/src/styles/chat.css` | ✅ 已重构 | 新增 exec-card / exec-timeline / react-step / step-box 等样式；保留 Markdown 样式 |
+| `frontend/vite.config.ts` | ✅ 已修复 | 代理端口 8000，去掉 rewrite 保留 /api 前缀 |
 
 ### 服务层变更
 
@@ -116,8 +117,8 @@ originSessionId: f7f05be4-dddf-4c65-91a4-0fe439b4f10f
 | 简单对话 | "你好" / "你是谁？" | chat 意图 → chat_node → 答案 | ✅ 可用 |
 | ReAct 循环 | "计算 123 × 456" | react 意图 → context_builder → react_executor → answer | ✅ 可用 |
 | 天气查询（工具调用） | "北京明天天气如何" | react 意图 → tool_call (weather_query) → 天气结果 | ✅ 已实现 |
-| 前端显示 | 任意输入 | Markdown 渲染 + 进度卡片 | ✅ 可用 |
-| SSE 事件流 | 通过 `/api/agent/stream` 端点 | start → node_done → tool_call → answer → done | ✅ 可用 |
+| 前端执行卡片 | 任意 react 意图 | 可展开卡片：耗时 + 思考/调用/结果步骤详情 | ✅ 可用 |
+| SSE 事件流 | 通过 `/api/agent/stream` 端点 | start → node_done(with steps+timing) → answer → done | ✅ 可用 |
 
 ### 工具扩展模式（已验证）
 
