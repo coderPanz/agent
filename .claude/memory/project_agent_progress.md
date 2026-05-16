@@ -60,7 +60,7 @@ originSessionId: f7f05be4-dddf-4c65-91a4-0fe439b4f10f
 | `tools/schema.py` | ✅ 已实现 | ToolResult Pydantic 模型 |
 | `tools/builtin.py` | ✅ 已实现 | 工具装饰器注册点，weather_query/web_search/calculator |
 | `tools/models/__init__.py` | ✅ 已实现（新增） | 工具实现层导出 |
-| `tools/models/weather.py` | ✅ 已实现（新增） | WeatherService 完整实现，Mock+OpenWeather 数据源切换 |
+| `tools/models/weather.py` | ✅ 已实现 | WeatherService 纯高德 API 实现，去掉 mock/openweather |
 
 ### API 层（已接入）
 
@@ -90,7 +90,7 @@ originSessionId: f7f05be4-dddf-4c65-91a4-0fe439b4f10f
 
 | 工具 | 路径 | 状态 | 说明 |
 |------|------|------|------|
-| `weather_query` | `tools/models/weather.py` | ✅ 已实现 | WeatherService 完整实现，支持 Mock 和 OpenWeather API 两种数据源 |
+| `weather_query` | `tools/models/weather.py` | ✅ 已实现 | WeatherService 纯高德 API，GAODE_API_KEY 读取 .env，已线上验证 |
 | `web_search` | `tools/builtin.py` | ⏳ 待接入 | 已注册骨架，需调用 Tavily API 或类似搜索引擎 |
 | `calculator` | `tools/builtin.py` | ⏳ 待接入 | 已注册骨架，可用 `eval()` 或 `sympy` 安全计算 |
 
@@ -128,12 +128,11 @@ originSessionId: f7f05be4-dddf-4c65-91a4-0fe439b4f10f
 4. LLM 自动识别意图并调用，ReAct Executor 处理工具结果
 
 **天气工具已完成实现**：
-- ✅ `tools/models/weather.py` — WeatherService 类（Mock 数据源，支持扩展为 OpenWeather API）
-- ✅ `tools/builtin.py` — `weather_query()` 工具函数注册
-- ✅ `.env` — 配置 `WEATHER_API_PROVIDER=mock`（开发环境）
-- ✅ 测试通过 — "北京明天天气如何" 能正确调用工具并返回结果
-
-**参考文档**：`Agent天气查询工具实现方案.md` 包含完整的 OpenWeather API 集成方案
+- ✅ `tools/models/weather.py` — WeatherService 纯高德 API，读取 `GAODE_API_KEY`
+- ✅ `tools/builtin.py` — `weather_query()` 工具函数注册，格式化高德字段（白天/夜间/风力级）
+- ✅ `agent_runtime.py` — 补充 `import app.core.agent.tools.builtin`，确保工具装饰器执行
+- ✅ `frontend/vite.config.ts` — 去掉 rewrite，/api 前缀完整转发后端
+- ✅ 端到端验证 — "北京明天天气如何" 返回真实高德数据（大雨 18-21°C 东风1-3级）
 
 ### 下一步工作优先级
 
@@ -143,7 +142,7 @@ originSessionId: f7f05be4-dddf-4c65-91a4-0fe439b4f10f
 | **P1** | 接入 calculator 工具 | ⏳ 待实现 | 用 `eval()` 或 `sympy`，参考 weather 模式实现 |
 | **P2** | 长期记忆（`memory/long_term.py`） | ⏳ 待实现 | 向量数据库 + 语义检索 |
 | **P2** | 进度卡片交互 | ⏳ 待实现 | 可折叠展开、显示工具调用明细 |
-| **P3** | OpenWeather API 集成 | 📄 有文档 | 升级天气工具的数据源（当前用 Mock） |
+| **P3** | 天气工具扩展 | ✅ 已完成 | 已使用高德 API，真实数据验证通过 |
 | **P3** | 多 Agent 编排 | ⏳ 待实现 | LangGraph Supervisor 模式 |
 
 **工具扩展参考**：
