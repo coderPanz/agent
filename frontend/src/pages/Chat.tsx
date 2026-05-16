@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import ReactMarkdown from 'react-markdown'
 import { agentStream } from '../api/client'
 import '../styles/chat.css'
 
@@ -156,7 +157,9 @@ export function ChatPage({ onFirstMessage }: ChatPageProps) {
                     ))}
                   </div>
                 )}
-                <div className="message-bubble">{msg.content}</div>
+                <div className="message-bubble markdown-content">
+                  <ReactMarkdown>{msg.content}</ReactMarkdown>
+                </div>
               </div>
             ) : (
               <div className="message-bubble">{msg.content}</div>
@@ -176,7 +179,9 @@ export function ChatPage({ onFirstMessage }: ChatPageProps) {
                 </div>
               )}
               {streaming.answer ? (
-                <div className="message-bubble">{streaming.answer}</div>
+                <div className="message-bubble markdown-content">
+                  <ReactMarkdown>{streaming.answer}</ReactMarkdown>
+                </div>
               ) : (
                 <div className="message-bubble loading">
                   <span className="dot" /><span className="dot" /><span className="dot" />
