@@ -1,22 +1,27 @@
 import { useState, useRef, useEffect } from 'react'
 import ReactMarkdown from 'react-markdown'
-import { agentStream } from '../api/client'
+import { agentStream, type ReActStep, type ToolDetail } from '../api/client'
 import '../styles/chat.css'
 
-interface ProgressCard {
-  kind: 'node' | 'tool'
+// ── 数据结构 ──────────────────────────────────────────────────
+
+interface ExecutionCard {
+  name: string
   label: string
   detail?: string
+  elapsed_ms?: number
+  steps?: ReActStep[]
+  tool_details?: ToolDetail[]
 }
 
 interface Message {
   role: 'user' | 'assistant'
   content: string
-  cards?: ProgressCard[]
+  cards?: ExecutionCard[]
 }
 
 interface StreamingMsg {
-  cards: ProgressCard[]
+  cards: ExecutionCard[]
   answer: string
 }
 
@@ -24,14 +29,33 @@ interface ChatPageProps {
   onFirstMessage?: (title: string) => void
 }
 
+// ── 工具函数 ──────────────────────────────────────────────────
+
+function formatElapsed(ms?: number): string {
+  if (!ms || ms <= 0) return ''
+  if (ms >= 1000) return `${(ms / 1000).toFixed(1)}s`
+  return `${ms}ms`
+}
+
+const NODE_ICONS: Record<string, string> = {
+  router:          '⚡',
+  context_builder: '◈',
+  react_executor:  '⊕',
+  critic:          '✓',
+  memory_write:    '◎',
+  chat:            '◈',
+}
+
+// ── 主组件 ────────────────────────────────────────────────────
+
 export function ChatPage({ onFirstMessage }: ChatPageProps) {
-  const [messages, setMessages] = useState<Message[]>([])
-  const [input, setInput] = useState('')
+  const [messages, setMessages]   = useState<Message[]>([])
+  const [input, setInput]         = useState('')
   const [streaming, setStreaming] = useState<StreamingMsg | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const bottomRef = useRef<HTMLDivElement>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const recordedRef = useRef(false)
+  const [error, setError]         = useState<string | null>(null)
+  const bottomRef                 = useRef<HTMLDivElement>(null)
+  const textareaRef               = useRef<HTMLTextAreaElement>(null)
+  const recordedRef               = useRef(false)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -57,23 +81,21 @@ export function ChatPage({ onFirstMessage }: ChatPageProps) {
       onFirstMessage(q.slice(0, 40))
     }
 
-    // 本次积累的进度卡和回答（用于最终写入 messages）
-    const accCards: ProgressCard[] = []
+    const accCards: ExecutionCard[] = []
     let accAnswer = ''
-
     setStreaming({ cards: [], answer: '' })
 
     try {
       for await (const evt of agentStream(q)) {
         if (evt.type === 'node_done') {
-          accCards.push({ kind: 'node', label: evt.label, detail: evt.detail })
-          setStreaming({ cards: [...accCards], answer: accAnswer })
-
-        } else if (evt.type === 'tool_call') {
-          const detail = Object.entries(evt.tools)
-            .map(([name, count]) => `${name} ×${count}`)
-            .join('、')
-          accCards.push({ kind: 'tool', label: `已调用工具 ${evt.total} 次`, detail })
+          accCards.push({
+            name:         evt.name,
+            label:        evt.label,
+            detail:       evt.detail,
+            elapsed_ms:   evt.elapsed_ms,
+            steps:        evt.steps,
+            tool_details: evt.tool_details,
+          })
           setStreaming({ cards: [...accCards], answer: accAnswer })
 
         } else if (evt.type === 'answer') {
@@ -83,16 +105,15 @@ export function ChatPage({ onFirstMessage }: ChatPageProps) {
         } else if (evt.type === 'error') {
           setError(evt.content)
         }
-        // 'start' 和 'done' 无需处理，for-await 结束时自然退出
+        // tool_call 事件已内嵌到 node_done，不再单独创建卡片
       }
 
-      // 流结束，写入最终消息
       setMessages(prev => [
         ...prev,
         {
-          role: 'assistant',
+          role:    'assistant',
           content: accAnswer || '（未收到回答）',
-          cards: accCards.length > 0 ? accCards : undefined,
+          cards:   accCards.length > 0 ? accCards : undefined,
         },
       ])
     } catch (e) {
@@ -151,9 +172,9 @@ export function ChatPage({ onFirstMessage }: ChatPageProps) {
             {msg.role === 'assistant' ? (
               <div className="message-content">
                 {msg.cards && msg.cards.length > 0 && (
-                  <div className="progress-list">
+                  <div className="exec-timeline">
                     {msg.cards.map((card, j) => (
-                      <ProgressCardView key={j} card={card} />
+                      <ExecutionCardView key={j} card={card} />
                     ))}
                   </div>
                 )}
@@ -167,14 +188,13 @@ export function ChatPage({ onFirstMessage }: ChatPageProps) {
           </div>
         ))}
 
-        {/* 流式进行中的消息 */}
         {streaming !== null && (
           <div className="message message-assistant">
             <div className="message-content">
               {streaming.cards.length > 0 && (
-                <div className="progress-list">
+                <div className="exec-timeline">
                   {streaming.cards.map((card, j) => (
-                    <ProgressCardView key={j} card={card} active />
+                    <ExecutionCardView key={j} card={card} active />
                   ))}
                 </div>
               )}
@@ -202,15 +222,77 @@ export function ChatPage({ onFirstMessage }: ChatPageProps) {
   )
 }
 
-// ── 进度卡片组件 ──────────────────────────────────────────────
-function ProgressCardView({ card, active }: { card: ProgressCard; active?: boolean }) {
-  const icon = card.kind === 'tool' ? '⚙' : '✓'
+// ── 执行卡片组件 ──────────────────────────────────────────────
+
+function ExecutionCardView({ card, active }: { card: ExecutionCard; active?: boolean }) {
+  const [expanded, setExpanded] = useState(false)
+  const hasDetails = !!card.steps?.some(s => s.thought || s.action || s.observation)
+  const icon = NODE_ICONS[card.name] ?? '●'
+  const timeStr = formatElapsed(card.elapsed_ms)
+
   return (
-    <div className={`progress-card${active ? ' progress-card-active' : ''}`}>
-      <span className="progress-card-icon">{icon}</span>
-      <span className="progress-card-label">{card.label}</span>
-      {card.detail && (
-        <span className="progress-card-detail">{card.detail}</span>
+    <div className={`exec-card ${active ? 'exec-card-active' : ''}`}>
+      <div
+        className={`exec-card-header${hasDetails ? ' exec-card-clickable' : ''}`}
+        onClick={() => hasDetails && setExpanded(v => !v)}
+      >
+        <span className="exec-icon">{icon}</span>
+        <span className="exec-label">{card.label}</span>
+        {card.detail && <span className="exec-detail">{card.detail}</span>}
+        <span className="exec-spacer" />
+        {timeStr && <span className="exec-time">{timeStr}</span>}
+        {hasDetails && (
+          <span className={`exec-chevron${expanded ? ' exec-chevron-open' : ''}`}>›</span>
+        )}
+      </div>
+
+      {expanded && card.steps && (
+        <div className="exec-card-body">
+          {card.steps.map((step, i) => (
+            <ReActStepView key={i} step={step} toolDetails={card.tool_details} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── ReAct 单步视图 ────────────────────────────────────────────
+
+function ReActStepView({ step, toolDetails }: { step: ReActStep; toolDetails?: ToolDetail[] }) {
+  const matchedTool = toolDetails?.find(td => td.tool_name === step.action)
+
+  return (
+    <div className="react-step">
+      {step.thought && (
+        <div className="step-row">
+          <span className="step-tag">思考</span>
+          <div className="step-box">{step.thought}</div>
+        </div>
+      )}
+
+      {step.action && (
+        <div className="step-row">
+          <span className="step-tag">调用</span>
+          <div className="step-box step-tool-box">
+            <span className="tool-name">{step.action}</span>
+            {matchedTool && (
+              <pre className="tool-input">
+                {JSON.stringify(matchedTool.input, null, 2)}
+              </pre>
+            )}
+            {matchedTool?.elapsed_ms ? (
+              <span className="tool-elapsed">{formatElapsed(matchedTool.elapsed_ms)}</span>
+            ) : null}
+          </div>
+        </div>
+      )}
+
+      {step.observation && step.observation !== '[最终回答]' && (
+        <div className="step-row">
+          <span className="step-tag">结果</span>
+          <div className="step-box step-observation">{step.observation}</div>
+        </div>
       )}
     </div>
   )

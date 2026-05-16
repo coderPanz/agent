@@ -1,5 +1,6 @@
 """Agent-Runtime: 入口、流式输出、异常恢复、生命周期"""
 
+import time
 import uuid
 from typing import AsyncIterator, AsyncGenerator
 from langchain_core.messages import HumanMessage
@@ -90,6 +91,7 @@ class AgentRuntime:
         }
 
         answer_sent = False
+        prev_time = time.monotonic()
 
         try:
             yield {"type": "start", "session_id": session_id}
@@ -97,6 +99,10 @@ class AgentRuntime:
             async for chunk in self._graph.astream(
                 initial_state, config=config, stream_mode="updates"
             ):
+                now = time.monotonic()
+                elapsed_ms = int((now - prev_time) * 1000)
+                prev_time = now
+
                 # chunk = {node_name: node_output_dict}
                 for node_name, node_output in chunk.items():
                     if node_name not in NODE_LABELS:
@@ -105,29 +111,46 @@ class AgentRuntime:
                     label = NODE_LABELS[node_name]
 
                     if node_name == "router":
-                        intent = node_output.get("intent", "unknown")
-                        yield {"type": "node_done", "name": node_name, "label": label, "detail": intent}
-
-                    elif node_name == "react_executor":
-                        # 工具调用汇总
-                        tool_calls = node_output.get("tool_calls") or []
-                        if tool_calls:
-                            tool_summary = {}
-                            for tc in tool_calls:
-                                name = tc.tool_name if hasattr(tc, "tool_name") else tc.get("tool_name", "unknown")
-                                tool_summary[name] = tool_summary.get(name, 0) + 1
-                            yield {
-                                "type": "tool_call",
-                                "tools": tool_summary,
-                                "total": len(tool_calls),
-                            }
-
-                        steps = node_output.get("react_steps") or []
                         yield {
                             "type": "node_done",
                             "name": node_name,
                             "label": label,
-                            "detail": f"{len(steps)} 步推理",
+                            "detail": node_output.get("intent", "unknown"),
+                            "elapsed_ms": elapsed_ms,
+                        }
+
+                    elif node_name == "react_executor":
+                        react_steps = node_output.get("react_steps") or []
+                        tool_calls  = node_output.get("tool_calls")  or []
+
+                        steps_data = [
+                            {
+                                "step":        s.step        if hasattr(s, "step")        else s.get("step", 0),
+                                "thought":     s.thought     if hasattr(s, "thought")     else s.get("thought", ""),
+                                "action":      s.action      if hasattr(s, "action")      else s.get("action"),
+                                "observation": (s.observation if hasattr(s, "observation") else s.get("observation")) or "",
+                            }
+                            for s in react_steps
+                        ]
+
+                        tool_details = [
+                            {
+                                "tool_name":  tc.tool_name  if hasattr(tc, "tool_name")  else tc.get("tool_name", ""),
+                                "input":      tc.input      if hasattr(tc, "input")      else tc.get("input", {}),
+                                "output":     tc.output     if hasattr(tc, "output")     else tc.get("output", ""),
+                                "elapsed_ms": tc.elapsed_ms if hasattr(tc, "elapsed_ms") else tc.get("elapsed_ms", 0),
+                            }
+                            for tc in tool_calls
+                        ]
+
+                        yield {
+                            "type":         "node_done",
+                            "name":         node_name,
+                            "label":        label,
+                            "detail":       f"{len(react_steps)} 步推理",
+                            "elapsed_ms":   elapsed_ms,
+                            "steps":        steps_data,
+                            "tool_details": tool_details,
                         }
 
                         final_answer = node_output.get("final_answer", "")
@@ -140,10 +163,10 @@ class AgentRuntime:
                         if final_answer and not answer_sent:
                             yield {"type": "answer", "content": final_answer}
                             answer_sent = True
-                        yield {"type": "node_done", "name": node_name, "label": label}
+                        yield {"type": "node_done", "name": node_name, "label": label, "elapsed_ms": elapsed_ms}
 
                     else:
-                        yield {"type": "node_done", "name": node_name, "label": label}
+                        yield {"type": "node_done", "name": node_name, "label": label, "elapsed_ms": elapsed_ms}
 
             yield {"type": "done"}
 

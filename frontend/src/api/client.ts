@@ -1,12 +1,34 @@
 const API_BASE = '/api'
 
 // ── Agent SSE 事件类型 ─────────────────────────────────────────
+export type ReActStep = {
+  step: number
+  thought: string
+  action: string | null
+  observation: string | null
+}
+
+export type ToolDetail = {
+  tool_name: string
+  input: Record<string, unknown>
+  output: string
+  elapsed_ms: number
+}
+
 export type AgentEvent =
-  | { type: 'start';     session_id: string }
-  | { type: 'node_done'; name: string; label: string; detail?: string }
+  | { type: 'start'; session_id: string }
+  | {
+      type: 'node_done'
+      name: string
+      label: string
+      detail?: string
+      elapsed_ms?: number
+      steps?: ReActStep[]
+      tool_details?: ToolDetail[]
+    }
   | { type: 'tool_call'; tools: Record<string, number>; total: number }
-  | { type: 'answer';    content: string }
-  | { type: 'error';     content: string }
+  | { type: 'answer'; content: string }
+  | { type: 'error';  content: string }
   | { type: 'done' }
 
 // 读取 POST /agent/stream 的 SSE 流，逐事件 yield
