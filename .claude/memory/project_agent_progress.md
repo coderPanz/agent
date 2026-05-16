@@ -52,12 +52,23 @@ originSessionId: f7f05be4-dddf-4c65-91a4-0fe439b4f10f
 | `tools/builtin.py` | ✅ 已实现（stub） | web_search / calculator 注册骨架，函数体待接入真实实现 |
 | `demo.py` | ✅ 已实现（新增） | 端到端测试入口：普通对话 / 工具调用 / 流式输出三个示例，均已验证通过 |
 
+### 工具系统架构（已完成重组）
+
+| 文件 | 状态 | 说明 |
+|------|------|------|
+| `tools/registry.py` | ✅ 已实现 | ToolRegistry 单例，装饰器注册，asyncio.wait_for 超时+重试 |
+| `tools/schema.py` | ✅ 已实现 | ToolResult Pydantic 模型 |
+| `tools/builtin.py` | ✅ 已实现 | 工具装饰器注册点，weather_query/web_search/calculator |
+| `tools/models/__init__.py` | ✅ 已实现（新增） | 工具实现层导出 |
+| `tools/models/weather.py` | ✅ 已实现（新增） | WeatherService 完整实现，Mock+OpenWeather 数据源切换 |
+
 ### API 层（已接入）
 
 | 文件 | 状态 | 说明 |
 |------|------|------|
-| `app/api/routes.py` | ✅ 已实现 | `POST /agent_chat`（异步）+ `POST /agent/stream`（SSE 监控） |
+| `app/api/routes.py` | ✅ 已实现 | `POST /api/agent_chat`（异步）+ `POST /api/agent/stream`（SSE 监控，修复了前缀） |
 | `app/api/schemas.py` | ✅ 已实现 | `AgentChatRequest/Response` + `AgentStreamRequest` |
+| `app/main.py` | ✅ 已修复 | 路由挂载添加 `/api` 前缀 |
 
 ### 前端（已接入）
 
@@ -75,13 +86,13 @@ originSessionId: f7f05be4-dddf-4c65-91a4-0fe439b4f10f
 | `app/services/llm.py` | 从 `openai.OpenAI` 改为 `langchain_openai.ChatOpenAI`，支持 `ainvoke` |
 | `app/services/agent.py` | 已清空旧代码（原引用已删除模块），路由直接使用 `_runtime` 单例 |
 
-### 待实现（工具能力 - 参考文档已提供）
+### 工具能力实现状态
 
-| 工具 | 文档 | 状态 | 备注 |
+| 工具 | 路径 | 状态 | 说明 |
 |------|------|------|------|
-| `weather_query` | `天气查询功能实现方案.md` | 📄 文档完成 | 包含 WeatherService 类、tool 注册、Mock/OpenWeather API 支持 |
-| `web_search` | `tools/builtin.py` (stub) | ⏳ 待接入 | 需调用 Tavily API 或类似搜索引擎 |
-| `calculator` | `tools/builtin.py` (stub) | ⏳ 待接入 | 可用 `eval()` 或 `sympy` 安全计算 |
+| `weather_query` | `tools/models/weather.py` | ✅ 已实现 | WeatherService 完整实现，支持 Mock 和 OpenWeather API 两种数据源 |
+| `web_search` | `tools/builtin.py` | ⏳ 待接入 | 已注册骨架，需调用 Tavily API 或类似搜索引擎 |
+| `calculator` | `tools/builtin.py` | ⏳ 待接入 | 已注册骨架，可用 `eval()` 或 `sympy` 安全计算 |
 
 ### 待实现（架构层 - P2）
 
@@ -104,28 +115,58 @@ originSessionId: f7f05be4-dddf-4c65-91a4-0fe439b4f10f
 |------|---------|--------|------|
 | 简单对话 | "你好" / "你是谁？" | chat 意图 → chat_node → 答案 | ✅ 可用 |
 | ReAct 循环 | "计算 123 × 456" | react 意图 → context_builder → react_executor → answer | ✅ 可用 |
-| 完整工具调用 | （工具函数需接入真实实现） | → tool_call 事件推送 | ⏳ 工具待接入 |
+| 天气查询（工具调用） | "北京明天天气如何" | react 意图 → tool_call (weather_query) → 天气结果 | ✅ 已实现 |
 | 前端显示 | 任意输入 | Markdown 渲染 + 进度卡片 | ✅ 可用 |
+| SSE 事件流 | 通过 `/api/agent/stream` 端点 | start → node_done → tool_call → answer → done | ✅ 可用 |
 
-### 工具扩展准备
+### 工具扩展模式（已验证）
 
-已提供天气查询工具的完整实现文档（`天气查询功能实现方案.md`），用户可参考该文档实现以下工具：
-- `weather_query(city, days)` — 天气查询（支持 Mock 和 OpenWeather API）
-- 参考文档包含：工具服务层实现、tool 注册装饰器、测试用例、部署配置
+**实现步骤**：
+1. 在 `tools/models/` 创建服务类（如 `weather.py` 中的 `WeatherService`）
+2. 在 `tools/models/__init__.py` 导出服务类
+3. 在 `tools/builtin.py` 中用 `@registry.register()` 装饰异步函数
+4. LLM 自动识别意图并调用，ReAct Executor 处理工具结果
 
-**工具扩展模式**：
-1. 创建服务模块 (`tools/xxxx.py`)
-2. 在 `tools/builtin.py` 中用 `@registry.register()` 注册
-3. LLM 自动识别意图并调用，ReAct Executor 处理工具结果
+**天气工具已完成实现**：
+- ✅ `tools/models/weather.py` — WeatherService 类（Mock 数据源，支持扩展为 OpenWeather API）
+- ✅ `tools/builtin.py` — `weather_query()` 工具函数注册
+- ✅ `.env` — 配置 `WEATHER_API_PROVIDER=mock`（开发环境）
+- ✅ 测试通过 — "北京明天天气如何" 能正确调用工具并返回结果
+
+**参考文档**：`天气查询功能实现方案.md` 包含完整的 OpenWeather API 集成方案
 
 ### 下一步工作优先级
 
-| 优先级 | 任务 | 说明 |
-|--------|------|------|
-| **P1** | 实现天气查询工具 | 参考提供的实现文档，手动编码（预计 1-2 小时） |
-| **P1** | 接入 web_search / calculator | 调用 Tavily API / eval()，接线到 `tools/builtin.py` |
-| **P2** | 长期记忆（`memory/long_term.py`） | 向量数据库 + 语义检索 |
-| **P2** | 进度卡片交互 | 可折叠展开、显示工具调用明细 |
-| **P3** | 多 Agent 编排 | LangGraph Supervisor 模式 |
+| 优先级 | 任务 | 状态 | 说明 |
+|--------|------|------|------|
+| **P1** | 接入 web_search 工具 | ⏳ 待实现 | 调用 Tavily / SerpAPI，参考 weather 模式实现 |
+| **P1** | 接入 calculator 工具 | ⏳ 待实现 | 用 `eval()` 或 `sympy`，参考 weather 模式实现 |
+| **P2** | 长期记忆（`memory/long_term.py`） | ⏳ 待实现 | 向量数据库 + 语义检索 |
+| **P2** | 进度卡片交互 | ⏳ 待实现 | 可折叠展开、显示工具调用明细 |
+| **P3** | OpenWeather API 集成 | 📄 有文档 | 升级天气工具的数据源（当前用 Mock） |
+| **P3** | 多 Agent 编排 | ⏳ 待实现 | LangGraph Supervisor 模式 |
 
-**How to apply:** 所有节点签名统一为 `async def xxx_node(state: AgentState) -> dict:`；LLM 客户端统一用 `init_llm_client()` 获取 ChatOpenAI 实例；所有工具通过 `@registry.register()` 装饰器注册。
+**工具扩展参考**：
+- 新工具应按 weather 工具的模式组织（服务类 → models 层 → builtin 注册）
+- 所有工具自动注入 LLM Prompt，支持 ReAct 循环调用
+
+## 最近更新（2026-05-16）
+
+| 改动 | 详情 |
+|------|------|
+| 工具架构重组 | 新增 `tools/models/` 层，天气工具完整实现并验证通过 |
+| 天气工具实现 | WeatherService 支持 Mock 和 OpenWeather API，已在 ReAct 循环中验证 |
+| 路由前缀修复 | API 端点改为 `/api/agent/stream`，与前端代理配置对齐 |
+| 测试通过 | 测试语句"北京明天天气如何"能正确触发工具调用和完整执行流程 |
+
+**工具实现验证结果**：
+```
+curl -X POST 'http://localhost:8000/api/agent/stream' \
+  -H 'Content-Type: application/json' \
+  -d '{"query":"北京明天天气如何","session_id":null}'
+
+✅ 完整流程：start → router(react) → context_builder → react_executor(tool_call weather_query) 
+→ answer(天气信息) → critic → memory_write → done
+```
+
+**How to apply:** 所有节点签名统一为 `async def xxx_node(state: AgentState) -> dict:`；LLM 客户端统一用 `init_llm_client()` 获取 ChatOpenAI 实例；所有工具通过 `@registry.register()` 装饰器注册到 `tools/builtin.py`，实现类放在 `tools/models/` 层。
