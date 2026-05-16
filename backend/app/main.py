@@ -28,8 +28,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 挂载路由
-app.include_router(router)
+# 挂载路由（使用 /api 前缀）
+app.include_router(router, prefix="/api")
 
 """====================rag 向量索引构建====================="""
 #  fastapi服务初始化时执行一次回调

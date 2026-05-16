@@ -1,583 +1,538 @@
 <!-- 记录项目学习过程 -->
-# 2026-05-06
-my-agent 项目从零到一学习并构建ai智能体项目。
 
-# python
-Python 本身是动态类型语言，友好的类型提示：可以提高代码的可读性、可维护性、可扩展性。不强制约束类型，但是推荐使用。
+# my-agent 学习笔记
 
-range() 生成整数序列的可迭代对象，常用于for 循环、生成连续数字，不占大内存（不是直接生成列表）。
+`my-agent` 是一个从零开始学习并构建 AI Agent 的项目。当前学习重点包括：
 
-**列表推导式**
-```python
-# 列表推导式
-documents = [chunk.page_content for chunk in chunks]
+- Python 后端基础
+- FastAPI 接口开发
+- SQLite / SQLAlchemy 数据库存储
+- RAG 文档检索流程
+- LangChain / Chroma / PyTorch 基础概念
+- 前端聊天与调试界面
 
-# 等价 普通 for 循环
-documents = []
-for chunk in chunks:
-    content = chunk.page_content
-    documents.append(content)
+## 1. 项目结构
+
+当前项目分为前端和后端：
+
+```text
+my-agent/
+├── backend/   # Python 后端
+├── frontend/  # 前端界面
+└── README.md  # 项目学习笔记
 ```
+
+前端初始化方式：
+
+```bash
+pnpm create vite ./ --template react-ts
+```
+
+后端主要使用 Python 生态。
+
+## 2. Python 基础
+
+Python 是动态类型语言，变量本身不会强制绑定类型。但推荐写类型提示，因为它可以提升代码可读性、可维护性和编辑器提示效果。
+
+### 2.1 类型提示
+
+```python
+from typing import List
+
+nums: List[int] = [1, 2, 3]
+```
+
+含义：
+
+- `List[int]` 表示这是一个整数列表
+- 类型提示不一定会在运行时强制校验
+- 主要用于代码提示、静态检查和团队协作
+
+### 2.2 range()
+
+`range()` 会生成一个整数序列的可迭代对象，常用于 `for` 循环。它不会一次性创建完整列表，因此比较省内存。
 
 ```python
 for i in range(10):
     print(i)
 ```
 
+输出从 `0` 到 `9`。
+
+### 2.3 列表推导式
+
+列表推导式可以用更短的写法生成列表。
 
 ```python
-from typing import List
-nums: List[int] = [1, 2, 3]
+documents = [chunk.page_content for chunk in chunks]
 ```
 
-## 项目结构
-前端：pnpm create vite ./ --template react-ts
-后端：python 生态
+等价于：
 
-### uv 项目管理
-uv： Python 包 / 环境 / 版本三合一管理器
+```python
+documents = []
+for chunk in chunks:
+    content = chunk.page_content
+    documents.append(content)
+```
 
-1. uv初始化项目cmd： uv init project-name
-生成如下项目结构：
+## 3. uv 项目管理
+
+`uv` 是 Python 包、环境、版本管理工具，可以用来管理依赖和虚拟环境。
+
+### 3.1 初始化项目
+
+```bash
+uv init project-name
+```
+
+生成结构示例：
+
+```text
 my-project/
 ├── .python-version   # uv 管理的 Python 版本文件
-├── pyproject.toml    # uv 项目核心配置文件（依赖+元数据）
-├── README.md         # 项目说明文档
-└── main.py           # 你的主程序代码
+├── pyproject.toml    # 项目依赖和元数据
+├── README.md         # 项目说明
+└── main.py           # 主程序入口
+```
 
+### 3.2 创建虚拟环境
 
-2. uv 创建虚拟环境
-cmd: uv venv, 创建虚拟环境的目的：隔离项目依赖，避免冲突。
+```bash
+uv venv
+```
 
-3. 激活虚拟环境
-cmd: source .venv/bin/activate, 激活虚拟环境的目的：在当前终端使用虚拟环境中的 Python 解释器。
+虚拟环境用于隔离项目依赖，避免不同项目之间的包版本冲突。
 
+### 3.3 激活虚拟环境
 
-### 后端技术栈汇总
-| 技术            | 类型          | 一句话作用                |
-| ------------- | ----------- | -------------------- |
-| uv            | Python项目管理  | 管理 Python 环境、依赖、虚拟环境 |
-| FastAPI       | Web框架       | 提供 AI Agent HTTP 接口  |
-| Uvicorn       | Web服务器      | 启动 FastAPI 服务        |
-| Pydantic      | 数据模型        | 校验请求参数和结构化输出         |
-| python-dotenv | 环境变量        | 加载 `.env` 配置         |
-| httpx         | HTTP客户端     | Agent 调用外部 API       |
-| OpenAI SDK    | 大模型SDK      | 调用 LLM               |
-| loguru        | 日志          | 统一日志输出               |
-| LangChain     | Agent/RAG框架 | 封装 Prompt、Tool、RAG   |
-| chromadb      | 向量数据库       | 存储文档 embedding       |
-| tiktoken      | Token工具     | 计算上下文 token          |
-| sqlalchemy    | ORM         | 数据库存储                |
-| sqlite        | 数据库         | 本地轻量数据库              |
-| pytest        | 测试          | 单元测试                 |
-| Ruff          | 代码规范        | lint + format        |
-| SSE/WebSocket | 实时通信        | AI 流式输出              |
-| React/Vue     | 前端          | Agent 聊天界面           |
+```bash
+source .venv/bin/activate
+```
 
+激活后，当前终端会使用该项目虚拟环境里的 Python 和依赖。
 
-__init__.py 的作用：__init__.py 是 Python 包（package）中的一个特殊文件，它最核心的作用是：告诉 Python：这个目录是一个“包”,
-cmd: from app.api import chat
-tips: Python 3.3+ 后, 理论上不是必须，存在 Namespace Package 机制，但仍然建议添加，避免潜在问题。
+## 4. 后端技术栈
 
+| 技术 | 类型 | 作用 |
+| --- | --- | --- |
+| uv | Python 项目管理 | 管理 Python 环境、依赖和虚拟环境 |
+| FastAPI | Web 框架 | 提供 AI Agent HTTP 接口 |
+| Uvicorn | Web 服务器 | 启动 FastAPI 服务 |
+| Pydantic | 数据模型 | 校验请求参数和结构化输出 |
+| python-dotenv | 环境变量 | 加载 `.env` 配置 |
+| httpx | HTTP 客户端 | 调用外部 API |
+| OpenAI SDK | 大模型 SDK | 调用 LLM |
+| loguru | 日志 | 统一日志输出 |
+| LangChain | Agent / RAG 框架 | 封装 Prompt、Tool、RAG 等能力 |
+| ChromaDB | 向量数据库 | 存储文档 embedding |
+| SQLAlchemy | ORM | 通过对象方式操作数据库 |
+| SQLite | 数据库 | 本地轻量数据库 |
+| pytest | 测试 | 单元测试 |
+| Ruff | 代码规范 | lint 和 format |
+| SSE / WebSocket | 实时通信 | AI 流式输出 |
+| React | 前端 | Agent 聊天界面 |
 
-dotenv 加载环境变量
+## 5. Python 包与配置
+
+### 5.1 `__init__.py`
+
+`__init__.py` 是 Python 包里的特殊文件。它的作用是告诉 Python：这个目录可以作为一个包来导入。
+
+示例：
+
 ```python
+from app.api import routes
+```
+
+Python 3.3 以后即使没有 `__init__.py` 也可能工作，但实际项目中仍然建议保留，避免导入问题。
+
+### 5.2 dotenv 环境变量
+
+`.env` 用来保存本地配置，例如 API Key、模型名、服务地址。
+
+```python
+import os
 from dotenv import load_dotenv
-# 将 .env 加载到当前 py 环境
+
 load_dotenv()
-# 从当前 py 环境读取
-os.getenv("DEEPSEEK_API_KEY")
+
+api_key = os.getenv("LLM_API_KEY")
 ```
 
-Path.home()：获取用户主目录：例如：/Users/yourname
-Path(__file__).resolve().parents[n]：获取当前文件的父目录的第 n 级目录
-parents[0]: 获取当前文件的父目录
-parents[1]: 获取当前文件的父目录的父目录
-parents[2]: 获取当前文件的父目录的父目录的父目录
+流程：
 
+1. `load_dotenv()` 把 `.env` 文件加载到当前 Python 进程。
+2. `os.getenv("变量名")` 从环境变量中读取配置。
 
+## 6. SQLite 和 SQLAlchemy
 
-## SQLite 数据库
-SQLite 是一个轻量级的关系型数据库管理系统，它不需要单独的服务器进程或系统配置，而是直接把所有内容存储在单一的文件中。
+### 6.1 SQLite 是什么
 
-什么是 ORM？
-ORM（Object-Relational Mapping）是对象关系映射，它是一种将对象模型与关系模型进行映射的技术。
-不需要直接使用 SQL 语句，而是通过对象的方式来操作数据库。
+SQLite 是轻量级关系型数据库。它不需要单独启动数据库服务，而是把数据直接存储在一个本地文件中。
 
-**check_same_thread=False的特殊机制**  
-默认情况下：SQLite 连接只能在创建它的线程中使用，例如：在一个线程中创建一个 SQLite 连接，在另一个线程中无法使用该连接。
-为了支持多线程，SQLite 提供了 check_same_thread=False 参数，使得 SQLite 连接可以在多个线程中使用。因为使用的的 FastAPI 框架是异步 + 多线程 Web 框架
+适合：
 
-**核心流程**
-1. 创建数据库引擎: engine = create_engine(...)
-2. 创建 Session 工厂: SessionLocal = sessionmaker(bind=engine)
-3. 创建真正 Session: db = SessionLocal()
-4. 操作数据库: db.query(...)
+- 本地开发
+- 小型项目
+- Demo 项目
+- 轻量数据存储
 
+### 6.2 ORM 是什么
 
-**sessionmaker 参数解释**
+ORM 全称是 Object-Relational Mapping，对象关系映射。
+
+简单理解：
+
+- 数据库表 -> Python 类
+- 表字段 -> 类属性
+- 一行数据 -> 一个对象
+
+使用 ORM 后，可以少写 SQL，更多通过对象方式操作数据库。
+
+### 6.3 SQLAlchemy 基本流程
+
 ```python
-# 创建数据库会话
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(bind=engine)
+db = SessionLocal()
 ```
 
-- autocommit=False: 不自动提交事务，确保事务可控，例如：db.add(user), 之后必须 db.commit() 才能将数据写入数据库
-- autoflush=False: 关闭自动刷新，只有你手动调用 session.flush() 或 session.commit() 时，才会把数据同步到数据库。
-- autoflush=True: 代码里的 新增 / 修改 / 删除 临时发送到数据库，数据只是暂存，其他的会话（另一个db = SessionLocal()拿不到，必须 commit 才能拿到）看不到，所以开启后默认行为是你只要执行查询，SQLAlchemy 就会自动先 flush 一次，
+核心步骤：
+
+1. 创建数据库引擎：`engine = create_engine(...)`
+2. 创建 Session 工厂：`SessionLocal = sessionmaker(bind=engine)`
+3. 创建真正的 Session：`db = SessionLocal()`
+4. 操作数据库：`db.query(...)`、`db.add(...)`、`db.commit()`
+
+### 6.4 `check_same_thread=False`
+
+SQLite 默认要求：数据库连接只能在创建它的线程中使用。
+
+FastAPI 是异步 Web 框架，可能涉及多线程处理请求。因此通常会配置：
+
+```python
+connect_args={"check_same_thread": False}
+```
+
+意思是允许 SQLite 连接跨线程使用。
+
+### 6.5 `sessionmaker` 参数
+
+```python
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=engine,
+)
+```
+
+参数说明：
+
+- `autocommit=False`：不自动提交事务，需要手动 `db.commit()`
+- `autoflush=False`：不自动把临时修改同步到数据库
+- `bind=engine`：绑定数据库引擎
+
+`autoflush=True` 时，只要执行查询，SQLAlchemy 可能会先自动 `flush` 一次：
+
 ```python
 user = User(name="test")
-session.add(user)  # 还没 flush，也没 commit
+session.add(user)
 
-# 只要你一查询 → 自动触发 flush
-# 好处：能查到刚 add 的数据
-# 坏处：频繁自动执行 SQL，性能差、不可控、容易出意外
 users = session.query(User).all()
 ```
 
-- bind=engine: 绑定数据库引擎
+好处是查询能看到刚刚 `add` 的对象；坏处是自动执行 SQL，行为不够可控。
 
+## 7. pathlib Path
 
-### Path
+`Path` 是 Python 标准库 `pathlib` 提供的路径对象，比字符串路径更清晰、跨平台。
+
 ```python
 from pathlib import Path
-p = Path("xxx")   # 转为 Path 对象
+
+p = Path("xxx")
 ```
 
-p.name       # 文件名/最后一级目录名
-p.stem       # 不带后缀的文件名
-p.suffix     # 文件后缀  .md .txt .py
-p.suffixes   # 多后缀列表  ['.tar', '.gz']
-p.parent     # 上一级目录 Path对象
-p.parents    # 所有上级目录迭代器
-p.resolve()  # 转为**绝对路径**，自动补全、解析相对路径
-p.absolute() # 绝对路径
+### 7.1 常用属性
 
-#### 路径拼接 / 重构
 ```python
-# 推荐用 / 拼接，跨平台兼容
+p.name        # 文件名或最后一级目录名
+p.stem        # 不带后缀的文件名
+p.suffix      # 文件后缀，例如 .md、.txt、.py
+p.suffixes    # 多后缀列表，例如 ['.tar', '.gz']
+p.parent      # 上一级目录
+p.parents     # 所有上级目录
+p.resolve()   # 转为绝对路径
+p.absolute()  # 绝对路径
+```
+
+### 7.2 路径拼接
+
+推荐使用 `/` 拼接路径：
+
+```python
 p2 = p / "subdir" / "test.md"
-
-# 替换文件名/后缀
-p.with_name("new.txt")    # 替换整个文件名
-p.with_stem("new_name")   # 替换纯文件名，保留后缀
-p.with_suffix(".pdf")     # 替换文件后缀
 ```
 
-#### 判断文件 / 目录类型
+### 7.3 路径重命名
+
 ```python
-p.exists()      # 是否存在
-p.is_file()     # 是否是文件
-p.is_dir()      # 是否是文件夹
-p.is_absolute() # 是否是绝对路径
+p.with_name("new.txt")   # 替换完整文件名
+p.with_stem("new_name")  # 替换文件名主体，保留后缀
+p.with_suffix(".pdf")    # 替换文件后缀
 ```
 
-#### 目录创建 / 删除
+### 7.4 判断文件或目录
+
 ```python
-# 创建文件夹，存在不报错
-p.mkdir(exist_ok=True, parents=True)  
-# parents=True 递归创建多级目录 a/b/c
+p.exists()       # 是否存在
+p.is_file()      # 是否是文件
+p.is_dir()       # 是否是目录
+p.is_absolute()  # 是否是绝对路径
+```
 
-# 删除文件
-p.unlink(missing_ok=True)  
+### 7.5 创建和删除
 
-# 删除空文件夹
+```python
+p.mkdir(exist_ok=True, parents=True)
+p.unlink(missing_ok=True)
 p.rmdir()
 ```
 
-#### 遍历目录
+说明：
+
+- `parents=True`：递归创建多级目录
+- `exist_ok=True`：目录已存在时不报错
+- `missing_ok=True`：文件不存在时不报错
+
+### 7.6 遍历目录
+
 ```python
-# 当前目录下所有 md
+# 当前目录下所有 md 文件
 p.glob("*.md")
 
-# 递归所有子目录 + 所有 md
+# 递归查找所有 md 文件
 p.glob("**/*.md")
 
-# 迭代遍历所有子文件/子目录
+# 遍历当前目录下所有子文件和子目录
 for item in p.iterdir():
     print(item)
-
-for file in p.glob("**/*.md"):
-    print(file)
 ```
 
-#### 文件读写
-```python
-# 读文本
-text = p.read_text(encoding="utf-8")
+### 7.7 文件读写
 
-# 读字节
+```python
+text = p.read_text(encoding="utf-8")
 data = p.read_bytes()
 
-# 写文本
 p.write_text("内容", encoding="utf-8")
-
-# 写字节
 p.write_bytes(b"xxx")
 ```
 
-## pytorch
-PyTorch（通常导入名为 torch）是目前 AI / 深度学习领域最主流的框架之一。用 Python 构建和训练神经网络
-PyTorch（torch）基础认知文档
+## 8. PyTorch 基础
 
-一、PyTorch 是什么？
+PyTorch 是 AI 和深度学习领域常用框架，Python 包名通常是 `torch`。
 
-PyTorch 是当前 AI / 深度学习领域最主流的框架之一。
+```python
+import torch
+```
 
-导入方式：
+一句话理解：PyTorch 用 Python 构建和运行神经网络。
 
+### 8.1 PyTorch 核心能力
+
+| 能力 | 说明 |
+| --- | --- |
+| 张量计算 | 类似 NumPy 的增强数组计算 |
+| GPU 加速 | 使用显卡加速计算 |
+| 深度学习 | 构建神经网络 |
+| 自动求导 | 自动计算梯度 |
+| 模型训练 | 训练 AI 模型 |
+| 模型推理 | 运行 AI 模型 |
+
+### 8.2 Tensor
+
+Tensor 是 PyTorch 最核心的数据结构。
+
+可以理解为：支持 GPU 和自动求导的数组。
+
+```python
 import torch
 
-其中：
-
-* PyTorch：框架名称
-* torch：Python 包名
-
-一句话理解：
-
-用 Python 构建和训练神经网络
-
-⸻
-
-二、Torch 的核心能力
-
-能力	说明
-张量计算	类似 NumPy 的增强版数组计算
-GPU 加速	使用 CUDA 调用显卡计算
-深度学习	构建神经网络
-自动求导	自动计算梯度
-模型训练	训练 AI 模型
-模型推理	运行 AI 模型
-
-⸻
-
-三、为什么 AI 大模型都使用 PyTorch？
-
-现代大模型几乎都基于 PyTorch。
-
-例如：
-
-* GPT
-* Llama
-* Qwen
-* DeepSeek
-* Gemma
-
-AI 技术栈关系：
-
-PyTorch
-    ↓
-Transformers
-    ↓
-LLM
-    ↓
-Agent / RAG
-
-⸻
-
-四、Torch 最核心概念：Tensor
-
-Tensor（张量）是 PyTorch 最核心的数据结构。
-
-一句话理解：
-
-支持 GPU 的超级数组
-
-类似：
-
-NumPy ndarray
-
-但更强：
-
-* 支持 GPU
-* 支持自动求导
-* 支持深度学习
-
-⸻
-
-五、Tensor 基础 Demo
-
-1. 创建 Tensor
-
-import torch
 x = torch.tensor([1, 2, 3])
 print(x)
+```
 
 输出：
 
+```text
 tensor([1, 2, 3])
+```
 
-⸻
+### 8.3 Tensor 运算
 
-2. Tensor 运算
-
+```python
 import torch
+
 a = torch.tensor([1, 2])
 b = torch.tensor([3, 4])
+
 print(a + b)
+```
 
 输出：
 
+```text
 tensor([4, 6])
+```
 
-⸻
+### 8.4 GPU 加速
 
-六、GPU 加速（Torch 最大核心）
+CPU 计算：
 
-CPU 计算
-
+```python
 x = torch.tensor([1, 2, 3])
+```
 
-⸻
+GPU 计算：
 
-GPU 计算
-
+```python
 x = torch.tensor([1, 2, 3]).cuda()
+```
 
-此时：
+检查 GPU 是否可用：
 
-Tensor 会在显卡上运行
-
-⸻
-
-七、Torch 与 NumPy 的区别
-
-NumPy	Torch
-CPU计算	CPU + GPU
-科学计算	AI训练
-无自动求导	自动梯度
-数值计算	深度学习
-
-⸻
-
-八、神经网络（核心能力）
-
-PyTorch 最重要能力：
-
-构建神经网络
-
-⸻
-
-Demo
-
-import torch.nn as nn
-model = nn.Linear(10, 1)
-
-含义：
-
-创建一个线性神经网络层
-
-⸻
-
-九、自动求导（非常重要）
-
-这是深度学习的核心机制。
-
-⸻
-
-Demo
-
+```python
 import torch
+
+print(torch.cuda.is_available())
+```
+
+### 8.5 神经网络
+
+```python
+import torch.nn as nn
+
+model = nn.Linear(10, 1)
+```
+
+含义：创建一个线性神经网络层。
+
+### 8.6 自动求导
+
+```python
+import torch
+
 x = torch.tensor(2.0, requires_grad=True)
 y = x ** 2
 y.backward()
+
 print(x.grad)
+```
 
 输出：
 
+```text
 tensor(4.)
+```
 
-解释：
+自动求导是反向传播、模型训练、梯度下降的基础。
 
-自动计算导数
+### 8.7 常见模块
 
-这是：
+| 模块 | 作用 |
+| --- | --- |
+| `torch` | 核心模块 |
+| `torch.nn` | 神经网络 |
+| `torch.optim` | 优化器 |
+| `torch.cuda` | GPU |
+| `torch.autograd` | 自动求导 |
+| `torch.utils.data` | 数据集处理 |
 
-* 反向传播
-* AI 训练
-* 梯度下降
+### 8.8 PyTorch 在 AI Agent 中的作用
 
-的核心基础。
+在当前 Agent / RAG / LLM 项目中，通常不会直接训练模型，更多是调用现成模型：
 
-⸻
+- OpenAI API
+- DeepSeek API
+- LangChain
+- Transformers
+- 本地 embedding 模型
 
-十、Torch 常见模块
+Transformers 底层大量依赖 PyTorch：
 
-模块	作用
-torch	核心模块
-torch.nn	神经网络
-torch.optim	优化器
-torch.cuda	GPU
-torch.autograd	自动求导
-torch.utils.data	数据集处理
-
-⸻
-
-十一、Torch 在 AI Agent 中的作用
-
-你当前学习方向：
-
-Agent
-RAG
-LLM
-
-大多数情况下：
-
-并不会直接训练模型
-
-更多是：
-
-调用现成模型
-
-例如：
-
-* OpenAI API
-* DeepSeek API
-* LangChain
-* Transformers
-
-⸻
-
-十二、Transformers 与 Torch 的关系
-
-Transformers 底层大量依赖 PyTorch。
-
-例如：
-
-from transformers import AutoModel
-model = AutoModel.from_pretrained(
-    "bert-base-uncased"
-)
-
-底层实际上：
-
-就是 torch 模型
-
-⸻
-
-十三、Torch 安装
-
-CPU 版本
-
-uv add torch
-
-⸻
-
-GPU 版本
-
-需要根据 CUDA 版本安装。
-
-因为：
-
-PyTorch 与 CUDA 强绑定
-
-⸻
-
-十四、验证安装
-
-查看版本
-
-import torch
-print(torch.__version__)
-
-⸻
-
-查看 GPU 是否可用
-
-print(torch.cuda.is_available())
-
-输出：
-
-True
-
-说明：
-
-GPU 可用
-
-⸻
-
-十五、Torch 学习重点（推荐顺序）
-
-建议优先学习：
-
-第一阶段
-
-Tensor
-CUDA
-基础运算
-
-⸻
-
-第二阶段
-
-nn.Module
-forward
-Dataset
-
-⸻
-
-第三阶段
-
-反向传播
-训练流程
-优化器
-
-⸻
-
-第四阶段
-
-Transformers
-本地模型
-Embedding
-微调
-
-⸻
-
-十六、AI 工程中的实际定位
-
-当前 AI 开发栈：
-
-PyTorch
-    ↓
-Transformers
-    ↓
-LLM
-    ↓
-Agent / RAG
-
-因此：
-
-Torch 是现代 AI 的基础设施
-
-⸻
-
-十七、前端视角类比（帮助理解）
-
-AI	前端
-torch	React Runtime
-tensor	state
-nn.Module	component
-forward	render
-backward	diff/update
-CUDA	GPU渲染
-
-⸻
-建议优先：FastAPI + LangChain + RAG+ Tool Calling
-后面再深入：Transformers + PyTorch+ 本地模型 + 模型微调
-
-
-### langchain
-from langchain_core.documents import Document, 
-langchain 文档对象，包含：正文内容、元数据、唯一 id
 ```python
-Document(
+from transformers import AutoModel
+
+model = AutoModel.from_pretrained("bert-base-uncased")
+```
+
+这个 `model` 底层就是 PyTorch 模型。
+
+### 8.9 学习顺序建议
+
+1. Tensor、CUDA、基础运算
+2. `nn.Module`、`forward`、Dataset
+3. 反向传播、训练流程、优化器
+4. Transformers、本地模型、Embedding、微调
+
+当前项目建议优先学习：
+
+- FastAPI
+- LangChain
+- RAG
+- Tool Calling
+
+之后再深入：
+
+- Transformers
+- PyTorch
+- 本地模型
+- 模型微调
+
+## 9. LangChain 基础
+
+LangChain 是构建 Agent / RAG 应用的框架，常用于封装：
+
+- Prompt
+- Tool
+- Document
+- Retriever
+- Chain
+- Agent
+
+### 9.1 Document 对象
+
+LangChain 的 `Document` 表示一段文档内容，包含正文和元数据。
+
+```python
+from langchain_core.documents import Document
+
+doc = Document(
     page_content="xx",
     metadata={"source": "tweet"},
     id=1,
 )
 ```
-文档分片后的列表都是 Document 对象
+
+字段说明：
+
+- `page_content`：正文内容
+- `metadata`：元数据，例如来源文件、页码、分片序号
+- `id`：唯一标识，可选
+
+### 9.2 文档分片后的结构
+
+RAG 中通常会先把长文档切成多个分片：
+
 ```python
 chunks = splitter.split_documents(documents)
+```
+
+结果类似：
+
+```python
 chunks = [
     Document(
         page_content="xx",
@@ -587,4 +542,43 @@ chunks = [
 ]
 ```
 
+这些分片会被向量化，然后写入 ChromaDB，后续根据用户问题召回相关内容。
 
+## 10. AI 技术栈关系
+
+当前项目的大致技术链路：
+
+```text
+Python
+  ↓
+FastAPI
+  ↓
+LangChain
+  ↓
+RAG / Tool Calling
+  ↓
+Agent
+```
+
+模型相关底层链路：
+
+```text
+PyTorch
+  ↓
+Transformers
+  ↓
+Embedding / LLM
+  ↓
+Agent / RAG
+```
+
+前端类比帮助理解：
+
+| AI 概念 | 前端类比 |
+| --- | --- |
+| `torch` | React Runtime |
+| `tensor` | state |
+| `nn.Module` | component |
+| `forward` | render |
+| `backward` | diff / update |
+| CUDA | GPU 渲染 |

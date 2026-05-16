@@ -75,13 +75,20 @@ originSessionId: f7f05be4-dddf-4c65-91a4-0fe439b4f10f
 | `app/services/llm.py` | 从 `openai.OpenAI` 改为 `langchain_openai.ChatOpenAI`，支持 `ainvoke` |
 | `app/services/agent.py` | 已清空旧代码（原引用已删除模块），路由直接使用 `_runtime` 单例 |
 
-### 待实现（P2）
+### 待实现（工具能力 - 参考文档已提供）
+
+| 工具 | 文档 | 状态 | 备注 |
+|------|------|------|------|
+| `weather_query` | `天气查询功能实现方案.md` | 📄 文档完成 | 包含 WeatherService 类、tool 注册、Mock/OpenWeather API 支持 |
+| `web_search` | `tools/builtin.py` (stub) | ⏳ 待接入 | 需调用 Tavily API 或类似搜索引擎 |
+| `calculator` | `tools/builtin.py` (stub) | ⏳ 待接入 | 可用 `eval()` 或 `sympy` 安全计算 |
+
+### 待实现（架构层 - P2）
 
 | 文件 | 说明 |
 |------|------|
 | `memory/long_term.py` | 长期记忆（预留） |
 | `executors/base.py` | 执行器抽象基类 |
-| `tools/builtin.py` | web_search / calculator 接入真实实现 |
 
 ### 已删除（第一版旧文件）
 
